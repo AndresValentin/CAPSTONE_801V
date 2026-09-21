@@ -1,0 +1,121 @@
+.filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 18px;
+}
+
+.filters-bar-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-primary);
+  padding-bottom: 10px;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 140px;
+}
+
+.filter-field label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+.filter-field label svg {
+  color: var(--color-accent-dark);
+}
+
+.filter-field select,
+.filter-field input {
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1.5px solid var(--color-border);
+  background: #fafbfe;
+  color: var(--color-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.filter-field select:focus,
+.filter-field input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.filter-field-dates .date-range {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.filter-field-dates input {
+  width: 118px;
+}
+
+.date-sep {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--color-accent-dark);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 4px;
+}
+
+.link-btn:hover {
+  color: var(--color-accent);
+}
+
+.filter-result-chip {
+  margin-left: auto;
+  align-self: center;
+  background: var(--gradient-brand);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.filter-result-chip strong {
+  font-size: 14px;
+  margin-right: 4px;
+}
+
+@media (max-width: 640px) {
+  .filters-bar {
+    align-items: stretch;
+  }
+  .filter-result-chip {
+    margin-left: 0;
+    text-align: center;
+  }
+}
