@@ -28,3 +28,18 @@ Los archivos 12_INSERT_DATA_DEMO.sql y 13_INSERT_METADATA.sql están diseñados 
 No se deben volver a ejecutar sobre una base ya poblada.
 Todos los datos incluidos son sintéticos y se utilizan exclusivamente para el desarrollo del proyecto.
 Las credenciales y cadenas de conexión no deben almacenarse en Git.
+
+El archivo 14_VALIDATE_INSTALL DEBE DEVOLVER LO SIGUIENTE:
+
+SEG_DOMINIO             3
+SEG_USUARIO             4
+SEG_USUARIO_DOMINIO     6
+
+ODS_SEG_CLIENTE        10
+ODS_SEG_SEGURO         11
+ODS_FIN_PRIMA          12
+ODS_SIN_SINIESTRO       8
+
+MET_TABLA                4
+MET_COLUMNA             37
+MET_RELACION             3

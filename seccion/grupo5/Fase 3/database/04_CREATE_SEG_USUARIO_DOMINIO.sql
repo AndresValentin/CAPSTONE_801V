@@ -30,7 +30,7 @@ GO
 
 
 /* ============================================================
-   ASIGNACIÓN INICIAL DE DOMINIOS
+   ASIGNACION INICIAL DE DOMINIOS
    ============================================================ */
 
 INSERT INTO seguridad.SEG_USUARIO_DOMINIO

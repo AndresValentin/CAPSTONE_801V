@@ -52,6 +52,6 @@ CREATE TABLE meta.MET_COLUMNA
     (
           ID_TABLA
         , ID_COLUMNA
-    ),
+    )
 );
 GO
