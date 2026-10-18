@@ -1,436 +1,645 @@
-BI Ruta Smart - Modelo de Datos
-1. Objetivo
-Diseñar una base de datos ficticia para BI Ruta Smart inspirada en una arquitectura de Data Warehouse, manteniendo un alcance simple, realista y posible de implementar dentro del proyecto Capstone.
+# BI Ruta Smart - Modelo de Datos
 
-La base de datos permitirá demostrar cómo BI Ruta Smart podrá:
+## 1. Objetivo
 
-Recibir una solicitud escrita por un usuario.
-Identificar el área de negocio relacionada con la solicitud.
-Validar qué información puede consultar el usuario.
-Identificar las tablas y columnas disponibles.
-Generar una consulta SQL.
-Obtener los datos desde SQL Server.
-Enviar los resultados a la aplicación web.
-Mostrar filtros, tablas de detalle y posteriormente visualizaciones.
-2. Base de datos
-Nombre:
+El objetivo es construir la base de datos de BI Ruta Smart, organizando la información de seguros, finanzas y siniestros junto con los permisos, metadatos y relaciones necesarios para realizar consultas.
 
-DB_BI_RUTA_SMART
+La base de datos permite a BI Ruta Smart:
 
-Motor:
+- Recibir una solicitud escrita por un usuario.
+- Identificar el dominio de negocio relacionado con la solicitud.
+- Validar qué información puede consultar el usuario.
+- Identificar las tablas, columnas y relaciones disponibles.
+- Generar y validar una consulta SQL.
+- Obtener los datos desde SQL Server.
+- Enviar los resultados a la aplicación web.
+- Mostrar filtros, tablas de detalle y, posteriormente, visualizaciones.
 
-SQL Server
 
-La base de datos será completamente ficticia y no utilizará información real de empresas, clientes ni personas.
+---
 
-3. Dominios de negocio
-La primera versión de BI Ruta Smart contará con tres dominios principales.
+## 2. Base de datos
 
-SIN - Siniestros
-Contendrá información relacionada con siniestros.
+- **Motor:** SQL Server
+- **Base de datos:** `DB_BI_RUTA_SMART`
 
-Ejemplos:
+La base se organiza mediante schemas para separar las responsabilidades técnicas y funcionales.
 
-Siniestros.
-Estados.
-Pagos.
-Reservas.
-Recuperos.
+---
+
+## 3. Dominios de negocio
+
+### 3.1 SIN - Siniestros
+
+Contiene información relacionada con siniestros, estados y montos asociados.
+
+Ejemplos de información:
+
+- Siniestros.
+- Fecha de ocurrencia y denuncia.
+- Estado del siniestro.
+- Monto denunciado.
+- Reserva.
+- Pago.
+- Recupero.
+
 Ejemplo de solicitud:
 
-"Quiero ver los siniestros abiertos por región."
+> Quiero ver los siniestros abiertos por región.
 
-FIN - Finanzas
-Contendrá información financiera.
+### 3.2 FIN - Finanzas
 
-Ejemplos:
+Contiene información relacionada con movimientos de prima y comisiones.
 
-Primas.
-Pagos.
-Comisiones.
-Montos pendientes.
-Movimientos financieros.
+Ejemplos de información:
+
+- Emisiones.
+- Anulaciones.
+- Prima.
+- Comisión.
+- Estado de pago.
+- Fecha de movimiento y pago.
+
 Ejemplo de solicitud:
 
-"Quiero ver las primas pendientes por producto."
+> Quiero ver las primas pendientes por producto.
 
-SEG - Seguros
-Contendrá información relacionada con producción y cartera.
+### 3.3 SEG - Seguros
 
-Ejemplos:
+Contiene información relacionada con clientes, pólizas, certificados e ítems asegurados.
 
-Pólizas.
-Productos.
-Clientes.
-Vigencias.
-Cartera.
+Ejemplos de información:
+
+- Clientes.
+- Pólizas.
+- Certificados.
+- Productos.
+- Ítems asegurados.
+- Vigencias.
+- Estado de póliza.
+- Monto asegurado.
+
 Ejemplo de solicitud:
 
-"Quiero ver las pólizas vigentes por producto."
+> Quiero ver las pólizas vigentes por producto.
 
-4. Capas de información
-La base de datos estará organizada mediante diferentes schemas.
+---
 
-ods
+## 4. Capas y schemas
 
-La capa ODS contendrá información integrada y preparada para ser utilizada por otros procesos.
+### 4.1 ODS
 
-Ejemplos futuros:
+Schema: `ods`
 
-ods.ODS_SIN_SINIESTRO
-ods.ODS_FIN_PRIMA
-ods.ODS_SEG_SEGURO
-DIM
-Schema:
+La capa ODS contiene información integrada y relacionada para los procesos del proyecto.
 
-dim
+Tablas actuales:
 
-La capa DIM estará orientada a consultas analíticas y generación de dashboards.
+- `ods.ODS_SEG_CLIENTE`
+- `ods.ODS_SEG_SEGURO`
+- `ods.ODS_FIN_PRIMA`
+- `ods.ODS_SIN_SINIESTRO`
 
-En esta capa podrán existir dimensiones compartidas como:
+### 4.2 DIM
 
-Tiempo.
-Producto.
-Región.
-Cliente.
-Póliza.
-También existirán tablas de hechos relacionadas con cada dominio.
+Schema: `dim`
 
-META
-Schema:
+La capa DIM concentrará el modelo analítico mediante dimensiones y tablas de hechos. La información será procesada desde ODS mediante procedimientos almacenados.
 
-meta
+Componentes previstos:
 
-Esta capa será especialmente importante para BI Ruta Smart.
+- Dimensión de tiempo.
+- Dimensión de producto.
+- Dimensión de región.
+- Dimensión de cliente.
+- Dimensión de póliza.
+- Hechos de cartera.
+- Hechos de prima.
+- Hechos de siniestros.
 
-Contendrá información descriptiva sobre:
+### 4.3 META
 
-Tablas disponibles.
-Columnas disponibles.
-Relaciones entre tablas.
-Dominio al que pertenece cada tabla.
-Descripción funcional de los datos.
-Información que puede utilizar la inteligencia artificial.
-Tablas propuestas:
+Schema: `meta`
 
-meta.MET_TABLA
-meta.MET_COLUMNA
-meta.MET_RELACION
-SEGURIDAD
-Schema:
+La capa META contiene el catálogo funcional utilizado por el backend y la inteligencia artificial para interpretar el modelo de datos.
 
-seguridad
-
-Esta capa administrará:
-
-Usuarios.
-Dominios.
-Accesos de cada usuario.
 Tablas:
 
-seguridad.SEG_DOMINIO
-seguridad.SEG_USUARIO
-seguridad.SEG_USUARIO_DOMINIO
-5. Modelo de seguridad
-BI Ruta Smart deberá restringir la información disponible dependiendo del usuario.
+- `meta.MET_TABLA`
+- `meta.MET_COLUMNA`
+- `meta.MET_RELACION`
 
-Los usuarios ficticios iniciales serán:
+### 4.4 SEGURIDAD
 
-USR_SIN
-USR_FIN
-USR_SEG
-USR_ADMIN
-Los dominios serán:
+Schema: `seguridad`
 
-SIN
-FIN
-SEG
-Las relaciones iniciales serán:
+La capa SEGURIDAD administra usuarios, dominios y autorizaciones funcionales.
 
-USR_SIN -> SIN
+Tablas:
 
-USR_FIN -> FIN
+- `seguridad.SEG_DOMINIO`
+- `seguridad.SEG_USUARIO`
+- `seguridad.SEG_USUARIO_DOMINIO`
 
-USR_SEG -> SEG
+---
 
-USR_ADMIN -> SIN
+## 5. Modelo de seguridad
 
-USR_ADMIN -> FIN
+### 5.1 Usuarios iniciales
 
-USR_ADMIN -> SEG
+- `USR_SIN`
+- `USR_FIN`
+- `USR_SEG`
+- `USR_ADMIN`
 
-6. Relación de seguridad
-El modelo será:
+### 5.2 Dominios
 
-SEG_USUARIO | | 1:N | SEG_USUARIO_DOMINIO | | N:1 | SEG_DOMINIO
+- `SIN` - Siniestros
+- `FIN` - Finanzas
+- `SEG` - Seguros
 
-Esto permitirá que un usuario pueda tener acceso a uno o varios dominios.
+### 5.3 Asignaciones iniciales
+
+- `USR_SIN` → `SIN`
+- `USR_FIN` → `FIN`
+- `USR_SEG` → `SEG`
+- `USR_ADMIN` → `SIN`
+- `USR_ADMIN` → `FIN`
+- `USR_ADMIN` → `SEG`
+
+### 5.4 Relación
+
+```text
+SEG_USUARIO
+     1
+     |
+     N
+SEG_USUARIO_DOMINIO
+     N
+     |
+     1
+SEG_DOMINIO
+```
+
+La tabla intermedia permite que un usuario tenga acceso a uno o varios dominios y evita repetir una misma asignación.
+
+### 5.5 Flujo de autorización
+
+1. Identificar al usuario.
+2. Verificar que el usuario esté activo.
+3. Consultar los dominios autorizados.
+4. Identificar el dominio requerido por la solicitud.
+5. Verificar si el usuario tiene permiso para consultar ese dominio.
+6. Recuperar solamente las tablas y columnas autorizadas.
+7. Generar y validar una consulta de solo lectura.
+8. Ejecutar la consulta.
+9. Devolver el resultado al frontend.
 
 Ejemplo:
 
-USR_FIN solamente podrá consultar información relacionada con FIN.
+```text
+Usuario: USR_SIN
+Solicitud: Quiero ver las primas por producto.
+Dominio requerido: FIN
+Resultado: Acceso no autorizado al dominio FIN.
+```
 
-USR_SIN solamente podrá consultar información relacionada con SIN.
+---
 
-USR_ADMIN podrá consultar los tres dominios.
+## 6. Modelo de metadatos
 
-7. Control de acceso en BI Ruta Smart
-Cuando un usuario realice una solicitud, el sistema deberá seguir conceptualmente este proceso:
+Los metadatos describen el modelo sin depender únicamente de nombres técnicos.
 
-Identificar al usuario.
-Consultar los dominios autorizados.
-Interpretar la solicitud.
-Identificar qué dominio necesita la consulta.
-Verificar si el usuario tiene autorización.
-Obtener solamente los metadatos permitidos.
-Generar la consulta SQL.
-Validar la consulta.
-Ejecutar la consulta sobre SQL Server.
-Enviar el resultado al frontend.
+### 6.1 MET_TABLA
+
+Documenta:
+
+- Schema.
+- Tabla.
+- Dominio.
+- Capa.
+- Descripción funcional.
+- Disponibilidad para IA.
+- Estado activo.
+
 Ejemplo:
 
-Usuario:
+```text
+Tabla: ODS_SIN_SINIESTRO
+Dominio: SIN
+Descripción: Información de siniestros asociados a ítems asegurados.
+```
 
-USR_SIN
+### 6.2 MET_COLUMNA
+
+Documenta:
+
+- Tabla a la que pertenece la columna.
+- Nombre de columna.
+- Tipo de dato.
+- Descripción funcional.
+- Si es llave.
+- Si es medida.
+- Si puede utilizarse como filtro.
+- Disponibilidad para IA.
+- Estado activo.
+
+Ejemplo:
+
+```text
+Tabla: ODS_SIN_SINIESTRO
+Columna: MNT_PAGADO
+Descripción: Monto pagado asociado al siniestro.
+Medida: Sí
+Filtro: No
+```
+
+### 6.3 MET_RELACION
+
+Documenta cómo se conectan las tablas y proporciona rutas de unión autorizadas para la generación de consultas.
+
+Relaciones actuales:
+
+```text
+ODS_SEG_SEGURO.ID_CLIENTE
+N:1
+ODS_SEG_CLIENTE.ID_CLIENTE
+```
+
+```text
+ODS_FIN_PRIMA.ID_ITEM
+N:1
+ODS_SEG_SEGURO.ID_ITEM
+```
+
+```text
+ODS_SIN_SINIESTRO.ID_ITEM
+N:1
+ODS_SEG_SEGURO.ID_ITEM
+```
+
+### 6.4 Diferencia entre FK y MET_RELACION
+
+- Una **Foreign Key** protege la integridad física de SQL Server.
+- `MET_RELACION` explica al backend y a la IA cómo deben conectarse las tablas.
+
+---
+
+## 7. Modelo relacional ODS
+
+```text
+ODS_SEG_CLIENTE
+    ID_CLIENTE
+        |
+        | 1:N
+        v
+ODS_SEG_SEGURO
+    ID_ITEM
+        |
+        +--------------------------+
+        |                          |
+        | 1:N                      | 1:N
+        v                          v
+ODS_FIN_PRIMA              ODS_SIN_SINIESTRO
+    ID_ITEM                    ID_ITEM
+```
+
+### 7.1 ODS_SEG_CLIENTE
+
+Grano:
+
+> Una fila por cliente.
+
+Identificación:
+
+- Técnica: `ID_CLIENTE`
+- Funcional: `COD_CLIENTE`
+
+Información principal:
+
+- Tipo de cliente.
+- Segmento.
+- Región del cliente.
+
+### 7.2 ODS_SEG_SEGURO
+
+Grano:
+
+> Una fila por ítem o certificado asegurado dentro de una póliza.
+
+Identificación:
+
+- Técnica: `ID_ITEM`
+- Funcional: `COD_POLIZA + COD_CERTIFICADO`
+
+Ejemplo:
+
+```text
+POL000001 / Certificado 1
+POL000001 / Certificado 2
+```
+
+Información principal:
+
+- Cliente.
+- Producto.
+- Región del ítem asegurado.
+- Fecha de emisión.
+- Inicio y fin de vigencia.
+- Estado de póliza.
+- Monto asegurado.
+
+### 7.3 ODS_FIN_PRIMA
+
+Grano:
+
+> Una fila por movimiento de prima asociado a un ítem asegurado.
+
+Identificación:
+
+- Técnica: `ID_MOVIMIENTO_PRIMA`
+- Funcional dentro del ítem: `ID_ITEM + NRO_MOVIMIENTO`
+
+Ejemplo:
+
+```text
+Movimiento 1: EMISION
+Movimiento 2: ANULACION
+```
+
+`MNT_PRIMA` puede ser negativo cuando el movimiento representa una anulación. `MNT_COMISION` no admite valores negativos.
+
+### 7.4 ODS_SIN_SINIESTRO
+
+Grano:
+
+> Una fila por siniestro asociado a un ítem asegurado.
+
+Identificación:
+
+- Técnica: `ID_SINIESTRO`
+- Funcional: `COD_SINIESTRO`
+
+Información principal:
+
+- Fecha de ocurrencia.
+- Fecha de denuncia.
+- Tipo de siniestro.
+- Estado.
+- Monto denunciado.
+- Reserva.
+- Pago.
+- Recupero.
+
+---
+
+## 8. Reglas de integridad
+
+Las tablas utilizan constraints para proteger la calidad de los datos.
+
+### 8.1 Primary Key
+
+Evita duplicados técnicos e identifica cada fila.
+
+### 8.2 Foreign Key
+
+Evita registros huérfanos y garantiza que las relaciones apunten a registros existentes.
+
+### 8.3 Unique
+
+Protege identificadores funcionales, por ejemplo:
+
+- Código de dominio.
+- Código de usuario.
+- Código de cliente.
+- Póliza + certificado.
+- Ítem + número de movimiento.
+- Código de siniestro.
+
+### 8.4 Check
+
+Valida reglas como:
+
+- Fecha final de vigencia igual o posterior a la fecha inicial.
+- Número de movimiento mayor que cero.
+- Comisión no negativa.
+- Fecha de denuncia igual o posterior a la ocurrencia.
+- Montos de siniestro no negativos.
+
+### 8.5 Default y Not Null
+
+Los valores por defecto junto con `NOT NULL` reducen nulos innecesarios y simplifican las consultas. Los campos donde la ausencia tiene significado, como una fecha de pago pendiente, pueden conservar `NULL`.
+
+---
+
+## 9. Datos iniciales
+
+La carga inicial incorpora:
+
+- 10 clientes.
+- 11 ítems asegurados.
+- 12 movimientos de prima.
+- 8 siniestros.
+- 4 tablas registradas en metadata.
+- 37 columnas registradas en metadata.
+- 3 relaciones registradas en metadata.
+
+El conjunto inicial permite validar relaciones, permisos, consultas y resultados antes de incorporar nuevas fuentes de información.
+
+---
+
+## 10. Aplicación BI Ruta Smart
+
+BI Ruta Smart será una aplicación web.
+
+### 10.1 Frontend
+
+Tecnologías:
+
+- React.
+- Vite.
+- Recharts para la representación de visualizaciones.
+
+Responsabilidades:
+
+- Recibir la solicitud del usuario.
+- Enviar la solicitud al backend.
+- Mostrar el título, filtros, columnas y datos recibidos.
+- Representar inicialmente una tabla de detalle.
+- Incorporar gráficos dinámicos en la interfaz.
+
+### 10.2 Backend
+
+Responsabilidades:
+
+- Recibir la solicitud desde React.
+- Identificar al usuario.
+- Consultar permisos por dominio.
+- Recuperar metadata autorizada.
+- Preparar el contexto para la inteligencia artificial.
+- Generar o validar SQL de solo lectura.
+- Ejecutar la consulta en SQL Server.
+- Devolver una respuesta estructurada al frontend.
+
+El backend se mantiene desacoplado del frontend y centraliza la integración con SQL Server, la seguridad y los metadatos.
+
+### 10.3 Contrato conceptual
 
 Solicitud:
 
-"Quiero ver las primas por producto."
+```json
+{
+  "usuario": "USR_SIN",
+  "pregunta": "Mostrar los siniestros abiertos por región"
+}
+```
 
-Dominio requerido:
+Respuesta:
 
-FIN
+```json
+{
+  "success": true,
+  "dashboard": {
+    "title": "Siniestros abiertos por región",
+    "domain": "SIN",
+    "filters": [],
+    "columns": [],
+    "data": []
+  }
+}
+```
 
-Resultado esperado:
+La inteligencia artificial interpreta la solicitud, el backend aplica las autorizaciones y validaciones, SQL Server devuelve los datos y React presenta el resultado.
 
-Acceso no autorizado al dominio FIN.
+---
 
-8. Metadatos
-La inteligencia artificial no deberá depender solamente del nombre de las tablas.
+## 11. Interfaz analítica
 
-Se construirá un catálogo de metadatos para explicar el significado de la información disponible.
+La primera versión funcional incluye:
 
-MET_TABLA
-Permitirá documentar:
+- Cuadro de solicitud en lenguaje natural.
+- Validación del dominio autorizado.
+- Filtros.
+- Tabla de detalle.
 
-Schema.
-Tabla.
-Dominio.
-Capa.
-Descripción.
-Disponibilidad para la IA.
-Ejemplo:
+Posibles filtros:
 
-ODS_SIN_SINIESTRO
+- Fecha.
+- Producto.
+- Región.
+- Estado.
+- Póliza.
+- Certificado.
 
-Dominio:
+Posibles campos de detalle:
 
-SIN
+- Cliente.
+- Póliza.
+- Certificado.
+- Producto.
+- Siniestro.
+- Fecha.
+- Región.
+- Estado.
+- Montos.
 
-Descripción:
+Visualizaciones contempladas:
 
-Información relacionada con los siniestros registrados.
+- Gráficos de barras.
+- Gráficos de líneas.
+- Gráficos circulares.
+- Indicadores.
+- Tarjetas.
+- Visualizaciones dinámicas mediante Recharts.
 
-MET_COLUMNA
-Permitirá documentar las columnas.
+---
 
-Ejemplo:
+## 12. Flujo general
 
-Tabla:
+```text
+Usuario
+   |
+   v
+React + Vite
+   |
+   v
+Backend / API
+   |
+   +--------------------------+
+   |                          |
+   v                          v
+Seguridad                  Metadata
+   |                          |
+   +-------------+------------+
+                 |
+                 v
+        Inteligencia artificial
+                 |
+                 v
+          Validación SQL
+                 |
+                 v
+            SQL Server
+                 |
+                 v
+               Datos
+                 |
+                 v
+            Backend / API
+                 |
+                 v
+          React + Vite
+                 |
+                 v
+          Dashboard web
+```
 
-ODS_SIN_SINIESTRO
+---
 
-Columna:
+## 13. Estado de implementación
 
-MNT_PAGADO
+### Implementado
 
-Descripción:
+- Base de datos `DB_BI_RUTA_SMART`.
+- Schemas `ods`, `dim`, `meta` y `seguridad`.
+- Modelo de seguridad.
+- Usuarios y dominios iniciales.
+- Tablas de metadata.
+- Tablas ODS de clientes, seguros, primas y siniestros.
+- Constraints de integridad.
+- Datos iniciales para validación funcional.
+- Metadata de tablas, columnas y relaciones.
+- Script de validación de instalación.
+- Scripts versionados para reconstruir la base.
 
-Monto pagado asociado al siniestro.
+### Siguiente etapa
 
-MET_RELACION
-Permitirá documentar cómo se relacionan las diferentes tablas.
+- Definir el modelo dimensional.
+- Crear dimensiones y tablas de hechos.
+- Crear procedimientos almacenados ODS → DIM.
+- Registrar la capa DIM en metadata.
+- Configurar la conexión segura entre el backend y SQL Server.
+- Implementar seguridad por dominio en el backend.
+- Integrar el servicio de inteligencia artificial.
+- Integrar el backend con la aplicación React.
+- Generar filtros y tablas a partir de la respuesta del backend.
+- Incorporar gráficos dinámicos en la interfaz.
 
-Ejemplo:
+---
 
-FT_SIN_COSTO_SINIESTRO.ID_PRODUCTO
+## 14. Instalación
 
-se relaciona con:
+Los scripts de base de datos deben ejecutarse en el orden indicado en `database/README.md`.
 
-LK_PRODUCTO.ID_PRODUCTO
+La secuencia actual comprende:
 
-9. Dominios de datos futuros
-SEG - Seguros
-Tablas principales propuestas:
+1. Creación de la base.
+2. Creación de schemas.
+3. Seguridad.
+4. Metadata.
+5. ODS.
+6. Carga inicial de datos.
+7. Carga del catálogo de metadata.
+8. Validación de la instalación.
 
-ODS_SEG_SEGURO
-FT_SEG_CARTERA
-Información:
-
-Póliza.
-Ítem asegurado.
-Producto.
-Cliente.
-Región.
-Estado.
-Vigencia.
-FIN - Finanzas
-Tablas principales propuestas:
-
-ODS_FIN_PRIMA
-FT_FIN_PRIMA
-Información:
-
-Prima.
-Comisión.
-Prima pagada.
-Prima pendiente.
-Fecha del movimiento.
-Producto.
-Póliza.
-SIN - Siniestros
-Tablas principales propuestas:
-
-
-ODS_SIN_SINIESTRO
-ODS_SIN_MOVIMIENTO_SINIESTRO
-FT_SIN_COSTO_SINIESTRO
-Información:
-
-Siniestro.
-Estado.
-Fecha de ocurrencia.
-Reserva.
-Pago.
-Recupero.
-Producto.
-Póliza.
-Región.
-10. Aplicación BI Ruta Smart
-BI Ruta Smart será una aplicación web.
-
-El frontend del proyecto utilizará:
-
-React.
-Vite.
-La aplicación permitirá que el usuario escriba en lenguaje natural qué información necesita.
-
-Ejemplo:
-
-"Quiero ver los siniestros pagados por región durante el año."
-
-La aplicación enviará la solicitud al backend.
-
-11. Backend
-El backend será responsable de conectar la aplicación con:
-
-SQL Server.
-Seguridad.
-Metadatos.
-Inteligencia artificial.
-Las principales responsabilidades serán:
-
-Recibir la solicitud desde React.
-Identificar al usuario.
-Consultar sus permisos.
-Recuperar los metadatos autorizados.
-Enviar el contexto permitido al modelo de inteligencia artificial.
-Obtener una definición de la consulta.
-Generar o validar SQL.
-Ejecutar la consulta.
-Devolver los resultados al frontend.
-La tecnología exacta del backend se definirá durante el desarrollo.
-
-Python es actualmente una de las alternativas consideradas.
-
-12. Frontend
-El frontend será desarrollado con React y Vite.
-
-En la primera versión la interfaz será sencilla.
-
-El usuario tendrá principalmente:
-
-Un cuadro de texto.
-Un botón para generar el dashboard.
-Una sección donde se mostrará el resultado.
-Ejemplo:
-
-¿Qué necesitas analizar?
-
-"Mostrar los siniestros abiertos por región."
-
-[Generar Dashboard]
-
-13. Dashboard inicial
-El MVP se enfocará principalmente en:
-
-Filtros.
-Tabla de detalle.
-Ejemplo:
-
-Filtros:
-
-Fecha.
-Producto.
-Región.
-Estado.
-Detalle:
-
-Número de siniestro.
-Póliza.
-Fecha.
-Producto.
-Región.
-Estado.
-Monto.
-14. Evolución futura de los dashboards
-Una vez que el funcionamiento básico esté correcto se podrán incorporar:
-
-Gráficos de barras.
-Gráficos de líneas.
-Gráficos circulares.
-Indicadores.
-Tarjetas.
-Diferentes visualizaciones según la solicitud.
-La aplicación actualmente incluye Recharts como librería disponible para desarrollar gráficos dentro de React.
-
-15. Flujo general de BI Ruta Smart
-El flujo esperado será:
-
-Usuario | v React + Vite | v Backend | +----------------------+ | | v v Seguridad Metadatos | | +----------+-----------+ | v Inteligencia Artificial | v Validación SQL | v SQL Server | v Datos | v React + Vite | v Dashboard Web
-
-16. Estado actual
-Base de datos
-DB_BI_RUTA_SMART
-
-Schemas creados
-stg
-ods
-dim
-meta
-seguridad
-Dominios
-SIN - Siniestros
-FIN - Finanzas
-SEG - Seguros
-Tablas de seguridad
-seguridad.SEG_DOMINIO
-seguridad.SEG_USUARIO
-seguridad.SEG_USUARIO_DOMINIO
-17. Próximos pasos
-El orden de construcción será:
-
-Completar seguridad.
-Crear MET_TABLA.
-Crear MET_COLUMNA.
-Crear MET_RELACION.
-Diseñar las tablas del dominio SEG.
-Diseñar las tablas del dominio FIN.
-Diseñar las tablas del dominio SIN.
-Crear datos ficticios.
-Validar consultas SQL manualmente.
-Construir la integración entre backend y SQL Server.
-Integrar inteligencia artificial.
-Conectar el backend con React.
-Mostrar tablas y filtros dinámicamente.
-Incorporar gráficos como evolución del MVP.
+Los scripts de carga inicial deben ejecutarse una sola vez sobre una base vacía. El script de validación puede ejecutarse nuevamente porque contiene únicamente consultas de lectura.
