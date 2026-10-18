@@ -24,20 +24,49 @@ CREATE TABLE meta.MET_RELACION
     CONSTRAINT PK_MET_RELACION
         PRIMARY KEY (ID_RELACION),
 
-    CONSTRAINT FK_MET_RELACION_TABLA_ORIGEN
-        FOREIGN KEY (ID_TABLA_ORIGEN)
-        REFERENCES meta.MET_TABLA (ID_TABLA),
+    CONSTRAINT UQ_MET_RELACION
+        UNIQUE
+        (
+              ID_TABLA_ORIGEN
+            , ID_COLUMNA_ORIGEN
+            , ID_TABLA_DESTINO
+            , ID_COLUMNA_DESTINO
+        ),
 
-    CONSTRAINT FK_MET_RELACION_COLUMNA_ORIGEN
-        FOREIGN KEY (ID_COLUMNA_ORIGEN)
-        REFERENCES meta.MET_COLUMNA (ID_COLUMNA),
+    CONSTRAINT FK_MET_RELACION_ORIGEN
+        FOREIGN KEY
+        (
+              ID_TABLA_ORIGEN
+            , ID_COLUMNA_ORIGEN
+        )
+        REFERENCES meta.MET_COLUMNA
+        (
+              ID_TABLA
+            , ID_COLUMNA
+        ),
 
-    CONSTRAINT FK_MET_RELACION_TABLA_DESTINO
-        FOREIGN KEY (ID_TABLA_DESTINO)
-        REFERENCES meta.MET_TABLA (ID_TABLA),
+    CONSTRAINT FK_MET_RELACION_DESTINO
+        FOREIGN KEY
+        (
+              ID_TABLA_DESTINO
+            , ID_COLUMNA_DESTINO
+        )
+        REFERENCES meta.MET_COLUMNA
+        (
+              ID_TABLA
+            , ID_COLUMNA
+        ),
 
-    CONSTRAINT FK_MET_RELACION_COLUMNA_DESTINO
-        FOREIGN KEY (ID_COLUMNA_DESTINO)
-        REFERENCES meta.MET_COLUMNA (ID_COLUMNA)
+    CONSTRAINT CK_MET_RELACION_TIPO
+        CHECK
+        (
+            DESC_TIPO_RELACION IN
+            (
+                  '1:1'
+                , '1:N'
+                , 'N:1'
+                , 'N:N'
+            )
+        )
 );
 GO

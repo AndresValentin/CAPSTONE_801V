@@ -4,6 +4,7 @@ GO
 CREATE TABLE seguridad.SEG_USUARIO_DOMINIO
 (
     ID_USUARIO INT NOT NULL,
+
     ID_DOMINIO INT NOT NULL,
 
     FLG_PUEDE_CONSULTAR BIT NOT NULL
@@ -13,8 +14,8 @@ CREATE TABLE seguridad.SEG_USUARIO_DOMINIO
     CONSTRAINT PK_SEG_USUARIO_DOMINIO
         PRIMARY KEY
         (
-            ID_USUARIO,
-            ID_DOMINIO
+              ID_USUARIO
+            , ID_DOMINIO
         ),
 
     CONSTRAINT FK_SEG_USUARIO_DOMINIO_USUARIO
@@ -28,11 +29,15 @@ CREATE TABLE seguridad.SEG_USUARIO_DOMINIO
 GO
 
 
+/* ============================================================
+   ASIGNACIÓN INICIAL DE DOMINIOS
+   ============================================================ */
+
 INSERT INTO seguridad.SEG_USUARIO_DOMINIO
 (
-    ID_USUARIO,
-    ID_DOMINIO,
-    FLG_PUEDE_CONSULTAR
+      ID_USUARIO
+    , ID_DOMINIO
+    , FLG_PUEDE_CONSULTAR
 )
 SELECT
       U.ID_USUARIO
