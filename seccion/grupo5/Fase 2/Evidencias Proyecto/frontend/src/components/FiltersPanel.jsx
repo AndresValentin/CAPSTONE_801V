@@ -56,7 +56,7 @@ export default function FiltersPanel({ filtros, setFiltros, resultados }) {
       </button>
 
       <div className="filter-result-chip">
-        <strong>{resultados}</strong> registros
+        <strong>{resultados}</strong> {resultados === 1 ? 'registro' : 'registros'}
       </div>
     </div>
   )

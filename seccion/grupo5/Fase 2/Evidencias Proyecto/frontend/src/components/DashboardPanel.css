@@ -111,15 +111,21 @@
   padding: 16px;
 }
 
-.table-card summary {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  cursor: pointer;
+.table-card-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-primary);
 }
 
-.table-card[open] summary {
-  margin-bottom: 12px;
+.table-card-title span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 .table-more {
@@ -230,4 +236,9 @@ tbody td {
   .kpi-row {
     grid-template-columns: 1fr;
   }
+}
+
+.dashboard-panel-actualizando {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
 }

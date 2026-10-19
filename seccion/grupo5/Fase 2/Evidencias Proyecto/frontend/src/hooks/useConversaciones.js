@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { guardarLocal, leerLocal, nuevoId } from '../lib/persistencia.js'
 
-const CLAVE = 'bi-copilot:conversaciones'
+const CLAVE_BASE = 'bi-copilot:conversaciones'
 const TITULO_NUEVO = 'Nuevo chat'
 
 function crearConversacion() {
@@ -9,8 +9,8 @@ function crearConversacion() {
   return { id: nuevoId(), titulo: TITULO_NUEVO, creada: ahora, actualizada: ahora, mensajes: [] }
 }
 
-function cargarConversaciones() {
-  const guardadas = leerLocal(CLAVE, [])
+function cargarConversaciones(clave) {
+  const guardadas = leerLocal(clave, [])
   return Array.isArray(guardadas) && guardadas.length ? guardadas : [crearConversacion()]
 }
 
@@ -25,11 +25,14 @@ export function reportesDe(conversacion) {
 
 // Historial de chats con IA (RF-08). Hoy vive en localStorage; cuando exista
 // backend, cargar/guardar se reemplazan por GET/POST a /api/conversaciones.
-export function useConversaciones() {
-  const [conversaciones, setConversaciones] = useState(cargarConversaciones)
+// `usuario` separa el historial: en un mismo navegador, cada usuario ve solo sus
+// chats (que incluyen datos de sus dominios). Sin backend se usa un historial común.
+export function useConversaciones(usuario) {
+  const clave = usuario ? `${CLAVE_BASE}:${usuario}` : CLAVE_BASE
+  const [conversaciones, setConversaciones] = useState(() => cargarConversaciones(clave))
   const [activaId, setActivaId] = useState(() => conversaciones[0].id)
 
-  useEffect(() => { guardarLocal(CLAVE, conversaciones) }, [conversaciones])
+  useEffect(() => { guardarLocal(clave, conversaciones) }, [clave, conversaciones])
 
   const activa = conversaciones.find((c) => c.id === activaId) ?? conversaciones[0]
 
@@ -43,6 +46,14 @@ export function useConversaciones() {
       return { ...c, titulo, actualizada: completo.fecha, mensajes: [...c.mensajes, completo] }
     }))
     return completo
+  }
+
+  // Para reportes cuyos filtros se cambiaron en el panel: el chat guarda la última versión
+  function actualizarMensaje(conversacionId, mensajeId, cambios) {
+    setConversaciones((prev) => prev.map((c) => (c.id !== conversacionId ? c : {
+      ...c,
+      mensajes: c.mensajes.map((m) => (m.id === mensajeId ? { ...m, ...cambios } : m)),
+    })))
   }
 
   function nuevaConversacion() {
@@ -68,6 +79,7 @@ export function useConversaciones() {
     activa,
     seleccionar: setActivaId,
     agregarMensaje,
+    actualizarMensaje,
     nuevaConversacion,
     eliminarConversacion,
   }

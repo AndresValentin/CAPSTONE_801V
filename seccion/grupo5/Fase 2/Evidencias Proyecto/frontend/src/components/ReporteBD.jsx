@@ -11,7 +11,7 @@ function formatCelda(valor, esMoneda) {
 
 // Reporte armado con los datos que devolvió el backend (SQL Server).
 // A diferencia de DashboardPanel, no calcula nada: solo dibuja `resultado`.
-export default function ReporteBD({ reporte }) {
+export default function ReporteBD({ reporte, actualizando = false }) {
   const { interpretacion: i, resultado: r } = reporte
   const sinAgrupar = i.agruparPor === 'ninguno' || r.serie.length === 0
   const visualizacion = sinAgrupar ? 'kpi' : i.visualizacion
@@ -24,7 +24,7 @@ export default function ReporteBD({ reporte }) {
   const moneda = new Set(r.detalle.columnasMoneda)
 
   return (
-    <section className="dashboard-panel">
+    <section className={`dashboard-panel ${actualizando ? 'dashboard-panel-actualizando' : ''}`} aria-busy={actualizando}>
       <div className="panel-title-row">
         <div className="report-heading">
           <h2><LayoutDashboard size={16} strokeWidth={2.4} /> {reporte.pregunta}</h2>
@@ -70,9 +70,18 @@ export default function ReporteBD({ reporte }) {
           )}
       </div>
 
-      {r.detalle.filas.length > 0 && (
-        <details className="table-card">
-          <summary>Detalle ({r.detalle.filas.length} de {r.cantidad} registros)</summary>
+      <section className="table-card">
+        <h3 className="table-card-title">
+          Detalle de registros
+          <span>
+            {r.detalle.filas.length < r.cantidad
+              ? `${r.detalle.filas.length} más recientes de ${r.cantidad}`
+              : `${r.cantidad} ${r.cantidad === 1 ? 'registro' : 'registros'}`}
+          </span>
+        </h3>
+        {r.detalle.filas.length === 0
+          ? <p className="chart-empty">No hay registros con los filtros de esta solicitud.</p>
+          : (
           <div className="table-scroll">
             <table>
               <thead>
@@ -91,8 +100,8 @@ export default function ReporteBD({ reporte }) {
               </tbody>
             </table>
           </div>
-        </details>
-      )}
+          )}
+      </section>
     </section>
   )
 }

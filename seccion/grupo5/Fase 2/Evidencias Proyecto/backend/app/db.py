@@ -154,6 +154,8 @@ def registrar_consulta(usuario: str, pregunta: str, estado: str, motivo: str | N
                        dominio: str | None = None) -> None:
     """Deja traza de cada solicitud (RF-07). Un fallo aquí no debe botar la respuesta."""
     uso = uso or {}
+    # Recortes según el largo de las columnas, para que el INSERT no falle
+    pregunta, motivo = pregunta[:500], motivo[:1000] if motivo else motivo
     try:
         with closing(_conectar()) as con:
             con.cursor().execute(

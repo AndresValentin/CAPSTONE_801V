@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 from . import db
 
-VERSION = "catalogo-v0.5"
+VERSION = "catalogo-v0.6"
 
 Columna = tuple[str, str]  # (tabla, columna) tal como aparecen en meta.MET_COLUMNA
 
@@ -89,7 +89,10 @@ DEFINICIONES: dict[str, DefinicionDominio] = {
             Atributo("Estado", (SIN, "DESC_ESTADO_SINIESTRO")),
             _PRODUCTO,
             _REGION,
+            Atributo("Denunciado", (SIN, "MNT_DENUNCIADO"), True),
+            Atributo("Reserva", (SIN, "MNT_RESERVA"), True),
             Atributo("Pagado", (SIN, "MNT_PAGADO"), True),
+            Atributo("Recuperado", (SIN, "MNT_RECUPERADO"), True),
         ),
     ),
     "FIN": DefinicionDominio(
@@ -113,6 +116,7 @@ DEFINICIONES: dict[str, DefinicionDominio] = {
             Atributo("Fecha", (FIN, "DT_FECHA_MOVIMIENTO")),
             Atributo("Tipo", (FIN, "DESC_TIPO_MOVIMIENTO")),
             Atributo("Estado de pago", (FIN, "DESC_ESTADO_PAGO")),
+            Atributo("Fecha de pago", (FIN, "DT_FECHA_PAGO")),
             _PRODUCTO,
             Atributo("Prima", (FIN, "MNT_PRIMA"), True),
             Atributo("Comisión", (FIN, "MNT_COMISION"), True),
@@ -140,6 +144,7 @@ DEFINICIONES: dict[str, DefinicionDominio] = {
             _PRODUCTO,
             _REGION,
             Atributo("Emisión", (SEG, "DT_FECHA_EMISION")),
+            Atributo("Inicio de vigencia", (SEG, "DT_FECHA_INICIO_VIGENCIA")),
             Atributo("Fin de vigencia", (SEG, "DT_FECHA_FIN_VIGENCIA")),
             Atributo("Estado", (SEG, "DESC_ESTADO_POLIZA")),
             Atributo("Monto asegurado", (SEG, "MNT_MONTO_ASEGURADO"), True),

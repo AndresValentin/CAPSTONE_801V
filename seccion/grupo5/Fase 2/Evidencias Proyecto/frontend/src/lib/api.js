@@ -17,16 +17,17 @@ export class ErrorApi extends Error {
   }
 }
 
-async function post(ruta, cuerpo, token) {
+// cuerpo === undefined hace un GET
+async function llamar(ruta, cuerpo, token) {
   let res
   try {
     res = await fetch(`${API_URL}${ruta}`, {
-      method: 'POST',
+      method: cuerpo === undefined ? 'GET' : 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        ...(cuerpo === undefined ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(cuerpo),
+      ...(cuerpo === undefined ? {} : { body: JSON.stringify(cuerpo) }),
     })
   } catch (err) {
     console.error(`[api] No se pudo conectar con el backend (${API_URL}${ruta}).`, err)
@@ -53,7 +54,7 @@ export function leerSesion() {
 }
 
 export async function iniciarSesion(usuario, clave) {
-  const sesion = await post('/api/sesion', { usuario, clave })
+  const sesion = await llamar('/api/sesion', { usuario, clave })
   try {
     sessionStorage.setItem(CLAVE_SESION, JSON.stringify(sesion))
   } catch {
@@ -70,11 +71,26 @@ export function cerrarSesion() {
   }
 }
 
-// Ambos caminos devuelven { estado, motivo?, interpretacion?, resultado? }.
-// Solo el backend trae `resultado` (los datos ya calculados en SQL Server).
-export async function interpretar(pregunta) {
-  if (!usaBackend) return interpretarSolicitud(pregunta)
+function tokenActual() {
   const sesion = leerSesion()
   if (!sesion) throw new ErrorApi(401, 'No hay sesión activa')
-  return post('/api/consultas', { pregunta }, sesion.token)
+  return sesion.token
+}
+
+// Ambos caminos devuelven { estado, motivo?, interpretacion?, resultado?, plan? }.
+// Solo el backend trae `resultado` (los datos ya calculados en SQL Server) y `plan`.
+// `panel` = { filtros: { campo: valor }, desde, hasta }: filtros elegidos en el dashboard.
+export async function interpretar(pregunta, panel) {
+  if (!usaBackend) return interpretarSolicitud(pregunta)
+  return llamar('/api/consultas', { pregunta, panel }, tokenActual())
+}
+
+// Filtros disponibles para el usuario, con los valores reales de la BD
+export function obtenerCatalogo() {
+  return llamar('/api/catalogo', undefined, tokenActual())
+}
+
+// Vuelve a ejecutar un reporte con otros filtros; no pasa por la IA
+export function reejecutarReporte(pregunta, plan) {
+  return llamar('/api/reportes', { pregunta, plan }, tokenActual())
 }

@@ -152,8 +152,8 @@ export default function DashboardPanel({ datos, filtros, reporte }) {
           )}
       </div>
 
-      <details className="table-card">
-        <summary>Detalle de siniestros ({datos.length} registros)</summary>
+      <section className="table-card">
+        <h3 className="table-card-title">Detalle de siniestros <span>{datos.length} {datos.length === 1 ? 'registro' : 'registros'}</span></h3>
         <div className="table-scroll">
           <table>
             <thead>
@@ -183,7 +183,7 @@ export default function DashboardPanel({ datos, filtros, reporte }) {
           </table>
           {datos.length > 50 && <p className="table-more">Mostrando 50 de {datos.length} registros.</p>}
         </div>
-      </details>
+      </section>
     </section>
   )
 }

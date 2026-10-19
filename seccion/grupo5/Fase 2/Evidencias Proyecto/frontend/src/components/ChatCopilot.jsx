@@ -20,6 +20,33 @@ const GUIA = [
   ['Cómo verlo', 'barras, líneas, torta, KPI o tabla'],
 ]
 
+// En modo backend la guía y las sugerencias salen de GET /api/catalogo, así el
+// usuario ve todas las métricas reales de las áreas que puede consultar.
+function guiaDesdeCatalogo(catalogo) {
+  const dominios = catalogo?.dominios ?? []
+  if (dominios.length === 0) return GUIA
+  const filtros = [...new Set(dominios.flatMap((d) => d.filtros.map((f) => f.etiqueta.toLowerCase())))]
+  return [
+    ...dominios.map((d) => [`Qué medir · ${d.nombre}`, d.metricas.map((m) => m.etiqueta.toLowerCase()).join(', ')]),
+    ['Filtros', `${filtros.join(', ')} o período (AAAA-MM)`],
+    GUIA[2],
+  ]
+}
+
+function sugerenciasDesdeCatalogo(catalogo) {
+  const dominios = catalogo?.dominios ?? []
+  if (dominios.length === 0) return SUGERENCIAS
+  const sugerencias = dominios.flatMap((d) => {
+    const [primera, segunda = primera] = d.metricas
+    const agrupar = d.filtros.find((f) => f.campo === 'region') ?? d.filtros[0]
+    return [
+      agrupar && `Genera un reporte de ${segunda.etiqueta.toLowerCase()} por ${agrupar.etiqueta.toLowerCase()} en barras`,
+      d.fecha && `Genera un reporte de ${primera.etiqueta.toLowerCase()} por mes en líneas`,
+    ].filter(Boolean)
+  })
+  return sugerencias.slice(0, 4)
+}
+
 function detalleReporte(interpretacion) {
   // Los reportes del backend ya traen sus etiquetas; los del modo demo se completan aquí
   if (interpretacion.metricaEtiqueta) {
@@ -39,14 +66,14 @@ function detalleReporte(interpretacion) {
   ]
 }
 
-function MensajeAsistente({ m, reporteActivoId, onVerReporte, onResponder }) {
+function MensajeAsistente({ m, sugerencias, reporteActivoId, onVerReporte, onResponder }) {
   return (
     <>
       <p className="chat-text">{m.texto}</p>
 
       {m.tipo === 'aclaracion' && (
         <div className="quick-replies">
-          {SUGERENCIAS.slice(0, 3).map((s) => (
+          {sugerencias.slice(0, 3).map((s) => (
             <button key={s} type="button" className="suggestion-chip" onClick={() => onResponder(s)}>{s}</button>
           ))}
         </div>
@@ -90,8 +117,10 @@ function MensajeAsistente({ m, reporteActivoId, onVerReporte, onResponder }) {
 }
 
 export default function ChatCopilot({
-  conversacion, pensando, reporteActivoId, onEnviar, onAdjuntar, onVerReporte, onNuevoChat,
+  conversacion, catalogo, pensando, reporteActivoId, onEnviar, onAdjuntar, onVerReporte, onNuevoChat,
 }) {
+  const guia = guiaDesdeCatalogo(catalogo)
+  const sugerencias = sugerenciasDesdeCatalogo(catalogo)
   const [texto, setTexto] = useState('')
   const [arrastrando, setArrastrando] = useState(false)
   const listRef = useRef(null)
@@ -144,12 +173,12 @@ export default function ChatCopilot({
             <h3>¿Qué reporte necesitas?</h3>
             <p>Pídeme que genere un reporte y lo armo en la plantilla. Para hacerlo bien, cuéntame:</p>
             <ul className="chat-guide">
-              {GUIA.map(([titulo, detalle]) => (
+              {guia.map(([titulo, detalle]) => (
                 <li key={titulo}><strong>{titulo}</strong><span>{detalle}</span></li>
               ))}
             </ul>
             <div className="chat-suggestions">
-              {SUGERENCIAS.map((s) => (
+              {sugerencias.map((s) => (
                 <button key={s} type="button" className="suggestion-chip" onClick={() => enviar(s)}>{s}</button>
               ))}
             </div>
@@ -163,7 +192,7 @@ export default function ChatCopilot({
             )}
             {m.rol === 'usuario' && m.tipo !== 'archivo' && <p>{m.texto}</p>}
             {m.rol === 'asistente' && (
-              <MensajeAsistente m={m} reporteActivoId={reporteActivoId} onVerReporte={onVerReporte} onResponder={enviar} />
+              <MensajeAsistente m={m} sugerencias={sugerencias} reporteActivoId={reporteActivoId} onVerReporte={onVerReporte} onResponder={enviar} />
             )}
           </div>
         ))}

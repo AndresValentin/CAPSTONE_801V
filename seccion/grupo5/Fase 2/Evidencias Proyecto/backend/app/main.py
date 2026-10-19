@@ -192,14 +192,15 @@ def iniciar_sesion(solicitud: SolicitudSesion):
 
 @app.get("/api/catalogo")
 def ver_catalogo(usuario: str = Depends(usuario_autenticado)):
-    """Filtros disponibles para el panel: solo los dominios que el usuario puede consultar,
-    con los valores reales de la BD."""
+    """Métricas y filtros disponibles para el chat y el panel: solo los dominios que el
+    usuario puede consultar, con los valores reales de la BD."""
     dominios_usuario, cat = _contexto_usuario(usuario)
     return {
         "dominios": [
             {
                 "codigo": cod,
                 "nombre": cat.dominios[cod],
+                "metricas": [{"clave": clave, "etiqueta": m.etiqueta} for clave, m in d.medidas.items()],
                 "filtros": [
                     {"campo": campo, "etiqueta": a.etiqueta, "valores": d.valores[campo]}
                     for campo, a in d.atributos.items()
