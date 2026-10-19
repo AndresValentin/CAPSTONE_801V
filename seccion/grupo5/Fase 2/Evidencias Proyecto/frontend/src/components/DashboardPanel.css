@@ -46,7 +46,6 @@
   color: var(--color-primary);
   padding: 5px 10px;
   border-radius: 999px;
-  text-transform: capitalize;
 }
 
 .kpi-row {
@@ -93,13 +92,6 @@
   font-weight: 700;
 }
 
-.chart-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
 .chart-card {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -119,10 +111,82 @@
   padding: 16px;
 }
 
-.table-card h3 {
-  margin: 0 0 12px;
+.table-card summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.table-card[open] summary {
+  margin-bottom: 12px;
+}
+
+.table-more {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.report-heading {
+  min-width: 0;
+}
+
+.report-heading h2 {
+  line-height: 1.35;
+}
+
+.report-heading h2 svg {
+  flex-shrink: 0;
+}
+
+.kpi-card-main {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.chart-card-main {
+  margin-bottom: 20px;
+  padding: 18px;
+}
+
+.chart-card-main h3 {
+  margin-bottom: 14px;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.chart-empty {
+  margin: 40px 0;
+  text-align: center;
   font-size: 13px;
   color: var(--color-text-muted);
+}
+
+.report-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 36px 0;
+}
+
+.report-kpi-value {
+  font-size: 44px;
+  font-weight: 800;
+  color: var(--color-primary);
+  letter-spacing: -0.01em;
+}
+
+.report-kpi-caption {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+th.num,
+td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .table-scroll {

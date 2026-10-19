@@ -1,73 +1,29 @@
-import { useRef, useState } from 'react'
-import readXlsxFile from 'read-excel-file/browser'
-import { FileUp, Download, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { validarFilasImportadas } from '../data/mockData.js'
+import { useState } from 'react'
+import { Download, CheckCircle2, AlertTriangle, Trash2 } from 'lucide-react'
+import { EXTENSIONES_ACEPTADAS } from '../lib/importacion.js'
 import './ImportExcel.css'
 
-function formatearCelda(valor) {
-  if (valor instanceof Date) {
-    const yyyy = valor.getFullYear()
-    const mm = String(valor.getMonth() + 1).padStart(2, '0')
-    return `${yyyy}-${mm}`
-  }
-  return valor
-}
-
-async function leerXlsx(file) {
-  const filas = await readXlsxFile(file)
-  const [encabezado, ...resto] = filas
-  const headers = encabezado.map((h) => String(h).trim())
-  return resto.map((fila) => {
-    const obj = {}
-    headers.forEach((h, i) => { obj[h] = formatearCelda(fila[i]) })
-    return obj
-  })
-}
-
-async function leerCsv(file) {
-  const texto = await file.text()
-  const [primeraLinea, ...lineas] = texto.trim().split(/\r?\n/)
-  const headers = primeraLinea.split(',').map((h) => h.trim())
-  return lineas.filter(Boolean).map((linea) => {
-    const valores = linea.split(',')
-    const obj = {}
-    headers.forEach((h, i) => { obj[h] = valores[i]?.trim() })
-    return obj
-  })
-}
-
-export default function ImportExcel({ onImportar }) {
-  const inputRef = useRef(null)
+export default function ImportExcel({ onImportar, totalImportados, onLimpiar }) {
   const [estado, setEstado] = useState('idle') // idle | procesando | listo | error
   const [resumen, setResumen] = useState(null)
+  const [arrastrando, setArrastrando] = useState(false)
 
-  async function handleFile(e) {
-    const file = e.target.files[0]
-    if (!file) return
+  async function importar(file) {
+    if (!file || estado === 'procesando') return
     setEstado('procesando')
     setResumen(null)
-
     try {
-      const esCsv = file.name.toLowerCase().endsWith('.csv')
-      const filas = esCsv ? await leerCsv(file) : await leerXlsx(file)
-      const { validos, rechazados } = validarFilasImportadas(filas)
-
-      if (validos.length) onImportar?.(validos)
-
-      setResumen({
-        archivo: file.name,
-        total: filas.length,
-        importados: validos.length,
-        rechazados: rechazados.length,
-        detalleErrores: rechazados.slice(0, 3),
-      })
+      setResumen(await onImportar(file))
       setEstado('listo')
     } catch {
       setEstado('error')
-      setResumen(null)
-    } finally {
-      e.target.value = ''
     }
+  }
+
+  function handleDrop(e) {
+    e.preventDefault()
+    setArrastrando(false)
+    importar(e.dataTransfer.files[0])
   }
 
   function descargarPlantilla() {
@@ -78,30 +34,33 @@ export default function ImportExcel({ onImportar }) {
     a.href = url
     a.download = 'plantilla_siniestros.csv'
     a.click()
-    URL.revokeObjectURL(url)
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   return (
     <div className="import-module">
-      <div className="module-title">
-        <span className="module-title-icon"><FileUp size={13} /></span>
-        Importar datos
-      </div>
-      <p className="module-hint">Carga un Excel/CSV con columnas: producto, region, estado, fecha, monto.</p>
+      <p className="module-hint">
+        Columnas: producto, region, estado, fecha, monto. La carga queda registrada en el chat activo.
+      </p>
 
       <input
-        ref={inputRef}
         type="file"
-        accept=".xlsx,.xls,.csv"
-        onChange={handleFile}
+        accept={EXTENSIONES_ACEPTADAS}
+        onChange={(e) => { importar(e.target.files[0]); e.target.value = '' }}
         className="import-input"
         id="import-file-input"
       />
-      <label htmlFor="import-file-input" className="import-dropzone">
-        {estado === 'procesando' ? 'Procesando…' : 'Seleccionar archivo o arrastrar aquí'}
+      <label
+        htmlFor="import-file-input"
+        className={`import-dropzone ${arrastrando ? 'import-dropzone-active' : ''}`}
+        onDragOver={(e) => { e.preventDefault(); setArrastrando(true) }}
+        onDragLeave={() => setArrastrando(false)}
+        onDrop={handleDrop}
+      >
+        {estado === 'procesando' ? 'Procesando…' : 'Selecciona o arrastra un .xlsx / .csv'}
       </label>
 
-      {resumen && (
+      {estado === 'listo' && resumen && (
         <div className={`import-summary ${resumen.rechazados ? 'import-summary-warn' : 'import-summary-ok'}`}>
           <div className="import-summary-row">
             {resumen.rechazados ? <AlertTriangle size={13} /> : <CheckCircle2 size={13} />}
@@ -109,8 +68,8 @@ export default function ImportExcel({ onImportar }) {
           </div>
           {resumen.detalleErrores.length > 0 && (
             <ul className="import-errors">
-              {resumen.detalleErrores.map((err, i) => (
-                <li key={i}>Fila {err.fila}: {err.errores.join(', ')}</li>
+              {resumen.detalleErrores.map((err) => (
+                <li key={err.fila}>Fila {err.fila}: {err.errores.join(', ')}</li>
               ))}
             </ul>
           )}
@@ -120,14 +79,21 @@ export default function ImportExcel({ onImportar }) {
       {estado === 'error' && (
         <div className="import-summary import-summary-warn">
           <div className="import-summary-row">
-            <AlertTriangle size={13} /> No se pudo leer el archivo.
+            <AlertTriangle size={13} /> No se pudo leer el archivo. Revisa el detalle en el chat.
           </div>
         </div>
       )}
 
-      <button type="button" className="template-link" onClick={descargarPlantilla}>
-        <Download size={12} /> Descargar plantilla CSV
-      </button>
+      <div className="import-footer">
+        <button type="button" className="template-link" onClick={descargarPlantilla}>
+          <Download size={12} /> Plantilla CSV
+        </button>
+        {totalImportados > 0 && (
+          <button type="button" className="template-link template-link-danger" onClick={onLimpiar}>
+            <Trash2 size={12} /> Quitar {totalImportados}
+          </button>
+        )}
+      </div>
     </div>
   )
 }

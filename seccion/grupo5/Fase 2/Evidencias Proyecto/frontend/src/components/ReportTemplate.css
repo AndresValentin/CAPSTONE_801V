@@ -1,0 +1,104 @@
+/* Reutiliza .kpi-row / .kpi-card de DashboardPanel.css para que la plantilla
+   tenga exactamente el mismo formato que el reporte final. */
+.report-template {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.tpl-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--color-primary);
+}
+
+.tpl-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: #eceef6;
+  color: var(--color-text-muted);
+}
+
+.tpl-kpi .kpi-icon {
+  opacity: 0.6;
+}
+
+.tpl-placeholder {
+  color: #c4c9da;
+}
+
+.tpl-chart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 300px;
+  margin-bottom: 20px;
+  padding: 24px;
+  border: 1.5px dashed #cfd4e4;
+  border-radius: var(--radius-md);
+  background: #fbfcff;
+  color: #b8bed2;
+  text-align: center;
+}
+
+.tpl-chart-title {
+  margin: 4px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.tpl-chart-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  max-width: 420px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.tpl-chart-hint em {
+  font-style: normal;
+  color: var(--color-accent-dark);
+  font-weight: 600;
+}
+
+.tpl-table {
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.tpl-table-title {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.tpl-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 16px;
+  padding: 9px 0;
+  border-top: 1px solid #f1f2f7;
+}
+
+.tpl-row span {
+  height: 9px;
+  border-radius: 5px;
+  background: #eceef6;
+}

@@ -67,6 +67,7 @@
   color: var(--color-text-muted);
 }
 
+.login-form input[type='text'],
 .login-form input[type='email'],
 .login-form input[type='password'] {
   font-size: 14px;

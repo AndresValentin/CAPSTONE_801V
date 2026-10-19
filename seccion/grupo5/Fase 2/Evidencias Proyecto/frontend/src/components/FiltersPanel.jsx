@@ -1,5 +1,5 @@
 import { SlidersHorizontal, Package, MapPin, CircleCheck, CalendarRange, RotateCcw } from 'lucide-react'
-import { productos, regiones, estados } from '../data/mockData.js'
+import { FILTROS_INICIALES, productos, regiones, estados } from '../data/mockData.js'
 import './FiltersPanel.css'
 
 export default function FiltersPanel({ filtros, setFiltros, resultados }) {
@@ -8,7 +8,7 @@ export default function FiltersPanel({ filtros, setFiltros, resultados }) {
   }
 
   function limpiar() {
-    setFiltros({ producto: 'Todos', region: 'Todas', estado: 'Todos', desde: '', hasta: '' })
+    setFiltros(FILTROS_INICIALES)
   }
 
   return (

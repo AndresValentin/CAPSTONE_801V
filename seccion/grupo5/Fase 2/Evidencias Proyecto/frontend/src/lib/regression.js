@@ -38,3 +38,29 @@ export function siguienteMes(mesTexto) {
   const mm = String(fecha.getMonth() + 1).padStart(2, '0')
   return `${yyyy}-${mm}`
 }
+
+function indiceMes(mesTexto) {
+  const [anio, mes] = mesTexto.split('-').map(Number)
+  return anio * 12 + mes
+}
+
+// Proyecta el monto del mes siguiente a partir de una serie mensual
+// [{ fecha: 'AAAA-MM', monto }]. El eje x usa la distancia real entre meses,
+// así un mes sin datos (por los filtros) no deforma la pendiente.
+export function proyectarMonto(serie) {
+  if (serie.length < 2) return null
+  const inicio = indiceMes(serie[0].fecha)
+  const modelo = regresionLineal(serie.map((s) => ({ x: indiceMes(s.fecha) - inicio, y: s.monto })))
+  if (!modelo) return null
+
+  const ultimo = serie[serie.length - 1].fecha
+  const proximoMes = siguienteMes(ultimo)
+  const proyeccion = Math.max(0, Math.round(modelo.predecir(indiceMes(proximoMes) - inicio)))
+
+  const chartData = serie.map((s) => ({ fecha: s.fecha, real: s.monto, proyectado: null }))
+  // Conecta el último punto real con la proyección
+  chartData[chartData.length - 1].proyectado = chartData[chartData.length - 1].real
+  chartData.push({ fecha: proximoMes, real: null, proyectado: proyeccion })
+
+  return { modelo, proximoMes, proyeccion, chartData }
+}

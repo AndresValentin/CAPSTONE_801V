@@ -1,22 +1,41 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, ShieldCheck, DatabaseZap } from 'lucide-react'
+import { iniciarSesion, usaBackend } from '../lib/api.js'
 import './Login.css'
 
 export default function Login() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const [usuario, setUsuario] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [entrando, setEntrando] = useState(false)
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    if (!email.trim() || !password.trim()) {
-      setError('Ingresa tu correo y contraseña para continuar.')
+    if (!usuario.trim() || !password) {
+      setError('Ingresa tu usuario y contraseña.')
       return
     }
     setError('')
-    navigate('/dashboard')
+    // En modo demo (sin backend) cualquier usuario entra
+    if (!usaBackend) {
+      navigate('/dashboard')
+      return
+    }
+    // Se valida contra seguridad.SEG_USUARIO, que también define qué dominios puede consultar.
+    // Al usuario solo se le muestra un mensaje simple; el detalle queda en la consola.
+    setEntrando(true)
+    try {
+      await iniciarSesion(usuario.trim().toUpperCase(), password)
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err.estado === 401
+        ? 'Usuario o contraseña incorrectos.'
+        : 'No se pudo iniciar sesión. Intenta nuevamente en unos minutos.')
+    } finally {
+      setEntrando(false)
+    }
   }
 
   return (
@@ -36,12 +55,13 @@ export default function Login() {
 
           <form className="login-form" onSubmit={handleSubmit}>
             <label>
-              Correo corporativo
+              Usuario
               <input
-                type="email"
-                placeholder="nombre@empresa.cl"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="text"
+                placeholder="Ej: USR_SIN"
+                autoComplete="username"
+                value={usuario}
+                onChange={(e) => setUsuario(e.target.value)}
               />
             </label>
 
@@ -50,6 +70,7 @@ export default function Login() {
               <input
                 type="password"
                 placeholder="••••••••"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -65,7 +86,9 @@ export default function Login() {
               <a href="#!" className="forgot">¿Olvidaste tu contraseña?</a>
             </div>
 
-            <button type="submit" className="btn-primary">Iniciar sesión</button>
+            <button type="submit" className="btn-primary" disabled={entrando}>
+              {entrando ? 'Validando…' : 'Iniciar sesión'}
+            </button>
           </form>
 
           <p className="signup-hint">

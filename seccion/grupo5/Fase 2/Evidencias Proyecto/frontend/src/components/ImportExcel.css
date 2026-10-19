@@ -11,7 +11,7 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 18px 10px;
+  padding: 14px 10px;
   border: 1.5px dashed var(--color-border);
   border-radius: 10px;
   font-size: 12px;
@@ -76,4 +76,25 @@
 
 .template-link:hover {
   color: var(--color-accent);
+}
+
+.import-dropzone-active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-dark);
+}
+
+.import-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.template-link-danger {
+  color: var(--color-text-muted);
+}
+
+.template-link-danger:hover {
+  color: var(--color-danger);
 }
