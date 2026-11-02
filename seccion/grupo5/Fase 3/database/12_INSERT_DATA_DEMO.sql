@@ -98,7 +98,7 @@ FROM
        CAST('2025-01-10' AS DATE),
        CAST('2025-01-15' AS DATE),
        CAST('2026-01-15' AS DATE),
-       'VENCIDA',
+       'VIGENTE',
        CAST(500000000.00 AS DECIMAL(18,2)))
 
     , ('POL000005', 1, 'CLI000005', 'AUTO', 'Seguro Automóvil',
@@ -122,7 +122,7 @@ FROM
        CAST('2025-05-01' AS DATE),
        CAST('2025-05-10' AS DATE),
        CAST('2026-05-10' AS DATE),
-       'VENCIDA',
+       'VIGENTE',
        CAST(65000000.00 AS DECIMAL(18,2)))
 
     , ('POL000008', 1, 'CLI000008', 'EMP', 'Seguro Empresa',
@@ -174,90 +174,189 @@ GO
 
 INSERT INTO ods.ODS_FIN_PRIMA
 (
-      ID_ITEM
-    , NRO_MOVIMIENTO
-    , DT_FECHA_MOVIMIENTO
-    , DESC_TIPO_MOVIMIENTO
-    , MNT_PRIMA
-    , MNT_COMISION
-    , DESC_ESTADO_PAGO
-    , DT_FECHA_PAGO
+    COD_MOVIMIENTO_PRIMA,
+    ID_ITEM,
+    NRO_MOVIMIENTO,
+    DT_FECHA_MOVIMIENTO,
+    DESC_TIPO_MOVIMIENTO,
+    MNT_PRIMA,
+    MNT_COMISION,
+    DESC_ESTADO_PAGO,
+    DT_FECHA_PAGO
 )
 SELECT
-      S.ID_ITEM
-    , V.NRO_MOVIMIENTO
-    , V.DT_FECHA_MOVIMIENTO
-    , V.DESC_TIPO_MOVIMIENTO
-    , V.MNT_PRIMA
-    , V.MNT_COMISION
-    , V.DESC_ESTADO_PAGO
-    , V.DT_FECHA_PAGO
+    V.COD_MOVIMIENTO_PRIMA,
+    S.ID_ITEM,
+    V.NRO_MOVIMIENTO,
+    V.DT_FECHA_MOVIMIENTO,
+    V.DESC_TIPO_MOVIMIENTO,
+    V.MNT_PRIMA,
+    V.MNT_COMISION,
+    V.DESC_ESTADO_PAGO,
+    V.DT_FECHA_PAGO
 FROM
 (
     VALUES
-      ('POL000001', 1, 1, CAST('2026-01-05' AS DATE),
-       'EMISION', 450000.00, 45000.00, 'PAGADO',
-       CAST('2026-01-10' AS DATE))
-
-    , ('POL000001', 2, 1, CAST('2026-01-05' AS DATE),
-       'EMISION', 320000.00, 32000.00, 'PAGADO',
-       CAST('2026-01-12' AS DATE))
-
-    , ('POL000002', 1, 1, CAST('2026-02-05' AS DATE),
-       'EMISION', 280000.00, 28000.00, 'PAGADO',
-       CAST('2026-02-15' AS DATE))
-
-    , ('POL000003', 1, 1, CAST('2026-01-20' AS DATE),
-       'EMISION', 950000.00, 95000.00, 'PAGADO',
-       CAST('2026-01-30' AS DATE))
-
-    , ('POL000004', 1, 1, CAST('2025-01-15' AS DATE),
-       'EMISION', 2800000.00, 280000.00, 'PAGADO',
-       CAST('2025-01-25' AS DATE))
-
-    , ('POL000005', 1, 1, CAST('2026-03-05' AS DATE),
-       'EMISION', 510000.00, 51000.00, 'PENDIENTE',
-       CAST(NULL AS DATE))
-
-    , ('POL000006', 1, 1, CAST('2026-02-15' AS DATE),
-       'EMISION', 1200000.00, 120000.00, 'PAGADO',
-       CAST('2026-02-25' AS DATE))
-
-    , ('POL000007', 1, 1, CAST('2025-05-10' AS DATE),
-       'EMISION', 240000.00, 24000.00, 'PAGADO',
-       CAST('2025-05-18' AS DATE))
-
-    , ('POL000008', 1, 1, CAST('2026-04-05' AS DATE),
-       'EMISION', 3500000.00, 350000.00, 'PENDIENTE',
-       CAST(NULL AS DATE))
-
-    , ('POL000009', 1, 1, CAST('2026-03-20' AS DATE),
-       'EMISION', 410000.00, 41000.00, 'PAGADO',
-       CAST('2026-03-25' AS DATE))
-
-    , ('POL000009', 1, 2, CAST('2026-04-01' AS DATE),
-       'ANULACION', -410000.00, 0.00, 'PAGADO',
-       CAST('2026-04-01' AS DATE))
-
-    , ('POL000010', 1, 1, CAST('2026-05-05' AS DATE),
-       'EMISION', 1400000.00, 140000.00, 'PENDIENTE',
-       CAST(NULL AS DATE))
-) V
+        (
+            'PRI000001',
+            'POL000001',
+            1,
+            1,
+            CAST('2026-01-05' AS DATE),
+            'EMISION',
+            CAST(450000.00 AS DECIMAL(18,2)),
+            CAST(45000.00 AS DECIMAL(18,2)),
+            'PAGADO',
+            CAST('2026-01-10' AS DATE)
+        ),
+        (
+            'PRI000002',
+            'POL000001',
+            2,
+            1,
+            CAST('2026-01-05' AS DATE),
+            'EMISION',
+            CAST(320000.00 AS DECIMAL(18,2)),
+            CAST(32000.00 AS DECIMAL(18,2)),
+            'PAGADO',
+            CAST('2026-01-12' AS DATE)
+        ),
+        (
+            'PRI000003',
+            'POL000002',
+            1,
+            1,
+            CAST('2026-02-05' AS DATE),
+            'EMISION',
+            CAST(280000.00 AS DECIMAL(18,2)),
+            CAST(28000.00 AS DECIMAL(18,2)),
+            'PAGADO',
+            CAST('2026-02-15' AS DATE)
+        ),
+        (
+            'PRI000004',
+            'POL000003',
+            1,
+            1,
+            CAST('2026-01-20' AS DATE),
+            'EMISION',
+            CAST(950000.00 AS DECIMAL(18,2)),
+            CAST(95000.00 AS DECIMAL(18,2)),
+            'PAGADO',
+            CAST('2026-01-30' AS DATE)
+        ),
+        (
+            'PRI000005',
+            'POL000004',
+            1,
+            1,
+            CAST('2025-01-15' AS DATE),
+            'EMISION',
+            CAST(2800000.00 AS DECIMAL(18,2)),
+            CAST(280000.00 AS DECIMAL(18,2)),
+            'PAGADO',
+            CAST('2025-01-25' AS DATE)
+        ),
+        (
+            'PRI000006',
+            'POL000005',
+            1,
+            1,
+            CAST('2026-03-05' AS DATE),
+            'EMISION',
+            CAST(510000.00 AS DECIMAL(18,2)),
+            CAST(51000.00 AS DECIMAL(18,2)),
+            'PENDIENTE',
+            CAST(NULL AS DATE)
+        ),
+        (
+            'PRI000007',
+            'POL000006',
+            1,
+            1,
+            CAST('2026-02-15' AS DATE),
+            'EMISION',
+            CAST(1200000.00 AS DECIMAL(18,2)),
+            CAST(120000.00 AS DECIMAL(18,2)),
+            'PAGADO',
+            CAST('2026-02-25' AS DATE)
+        ),
+        (
+            'PRI000008',
+            'POL000007',
+            1,
+            1,
+            CAST('2025-05-10' AS DATE),
+            'EMISION',
+            CAST(240000.00 AS DECIMAL(18,2)),
+            CAST(24000.00 AS DECIMAL(18,2)),
+            'PAGADO',
+            CAST('2025-05-18' AS DATE)
+        ),
+        (
+            'PRI000009',
+            'POL000008',
+            1,
+            1,
+            CAST('2026-04-05' AS DATE),
+            'EMISION',
+            CAST(3500000.00 AS DECIMAL(18,2)),
+            CAST(350000.00 AS DECIMAL(18,2)),
+            'PENDIENTE',
+            CAST(NULL AS DATE)
+        ),
+        (
+            'PRI000010',
+            'POL000009',
+            1,
+            1,
+            CAST('2026-03-20' AS DATE),
+            'EMISION',
+            CAST(410000.00 AS DECIMAL(18,2)),
+            CAST(41000.00 AS DECIMAL(18,2)),
+            'PAGADO',
+            CAST('2026-03-25' AS DATE)
+        ),
+        (
+            'PRI000011',
+            'POL000009',
+            1,
+            2,
+            CAST('2026-04-01' AS DATE),
+            'ANULACION',
+            CAST(-410000.00 AS DECIMAL(18,2)),
+            CAST(0.00 AS DECIMAL(18,2)),
+            'PAGADO',
+            CAST('2026-04-01' AS DATE)
+        ),
+        (
+            'PRI000012',
+            'POL000010',
+            1,
+            1,
+            CAST('2026-05-05' AS DATE),
+            'EMISION',
+            CAST(1400000.00 AS DECIMAL(18,2)),
+            CAST(140000.00 AS DECIMAL(18,2)),
+            'PENDIENTE',
+            CAST(NULL AS DATE)
+        )
+) AS V
 (
-      COD_POLIZA
-    , COD_CERTIFICADO
-    , NRO_MOVIMIENTO
-    , DT_FECHA_MOVIMIENTO
-    , DESC_TIPO_MOVIMIENTO
-    , MNT_PRIMA
-    , MNT_COMISION
-    , DESC_ESTADO_PAGO
-    , DT_FECHA_PAGO
+    COD_MOVIMIENTO_PRIMA,
+    COD_POLIZA,
+    COD_CERTIFICADO,
+    NRO_MOVIMIENTO,
+    DT_FECHA_MOVIMIENTO,
+    DESC_TIPO_MOVIMIENTO,
+    MNT_PRIMA,
+    MNT_COMISION,
+    DESC_ESTADO_PAGO,
+    DT_FECHA_PAGO
 )
-
-INNER JOIN ods.ODS_SEG_SEGURO S
-    ON  S.COD_POLIZA = V.COD_POLIZA
-    AND S.COD_CERTIFICADO = V.COD_CERTIFICADO;
+INNER JOIN ods.ODS_SEG_SEGURO AS S
+    ON S.COD_POLIZA = V.COD_POLIZA
+   AND S.COD_CERTIFICADO = V.COD_CERTIFICADO;
 GO
 
 /* ============================================================

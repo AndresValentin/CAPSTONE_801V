@@ -84,6 +84,10 @@ FROM
        'Identificador técnico del movimiento de prima.',
        1, 0, 0)
 
+    , ('COD_MOVIMIENTO_PRIMA', 'VARCHAR(20)',
+       'Código único identificador del movimiento de prima.',
+       1, 0, 1)
+
     , ('ID_ITEM', 'INT',
        'Identificador técnico del ítem asegurado asociado al movimiento de prima.',
        1, 0, 0)
