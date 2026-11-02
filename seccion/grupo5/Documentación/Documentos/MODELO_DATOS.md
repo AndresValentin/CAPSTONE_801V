@@ -1,4 +1,4 @@
-# BI Ruta Smart - Modelo de Datos
+# BI Copilot - Modelo de Datos
 
 ## 1. Objetivo
 
