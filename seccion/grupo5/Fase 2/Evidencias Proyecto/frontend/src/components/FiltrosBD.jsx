@@ -3,9 +3,9 @@ import './FiltersPanel.css'
 
 // Barra de filtros del modo backend. Los campos y sus valores vienen de
 // GET /api/catalogo, así que cambian según el dominio y los permisos del usuario.
-// Lo que se elija aquí se envía junto con la próxima pregunta del chat y, si
-// hay un reporte del mismo dominio en pantalla, lo vuelve a calcular.
-export default function FiltrosBD({ catalogo, panel, onCambiar, resultados, actualizando, error }) {
+// Los filtros recalculan el gráfico o el área en pantalla; si aún no hay gráficos,
+// también se envían con la próxima pregunta. Cambiar el área muestra los datos de esa área.
+export default function FiltrosBD({ catalogo, panel, onCambiar, onCambiarArea, resultados, actualizando, error, titulo = 'Filtros' }) {
   const dominios = catalogo?.dominios ?? []
   const dominio = dominios.find((d) => d.codigo === panel.dominio) ?? dominios[0]
   if (!dominio) return null
@@ -24,18 +24,33 @@ export default function FiltrosBD({ catalogo, panel, onCambiar, resultados, actu
   const hayFiltros = Object.keys(panel.filtros).length > 0 || panel.desde || panel.hasta
 
   return (
-    <div className="filters-bar">
-      <div className="filters-bar-title">
-        <SlidersHorizontal size={15} strokeWidth={2.4} />
-        <span>Filtros</span>
+    <div className="filters-bar filters-bar-bd">
+      <div className="filtros-cabecera">
+        <div className="filters-bar-title">
+          <SlidersHorizontal size={15} strokeWidth={2.4} />
+          <span>{titulo}</span>
+        </div>
+        <div className="filtros-acciones">
+          <button className="link-btn" onClick={() => cambiar({ filtros: {}, desde: '', hasta: '' })} disabled={!hayFiltros}>
+            <RotateCcw size={13} /> Limpiar
+          </button>
+          {resultados !== undefined && (
+            <div className={`filter-result-chip ${actualizando ? 'filter-result-chip-cargando' : ''}`}>
+              {actualizando
+                ? 'Actualizando…'
+                : <><strong>{resultados.toLocaleString('es-CL')}</strong> {resultados === 1 ? 'registro' : 'registros'}</>}
+            </div>
+          )}
+        </div>
       </div>
 
+      <div className="filtros-campos">
       {dominios.length > 1 && (
         <div className="filter-field">
           <label><Layers size={13} /> Área</label>
           <select
             value={dominio.codigo}
-            onChange={(e) => onCambiar({ ...panel, dominio: e.target.value, filtros: {} })}
+            onChange={(e) => onCambiarArea(e.target.value)}
           >
             {dominios.map((d) => <option key={d.codigo} value={d.codigo}>{d.nombre}</option>)}
           </select>
@@ -75,19 +90,9 @@ export default function FiltrosBD({ catalogo, panel, onCambiar, resultados, actu
         </div>
       )}
 
-      <button className="link-btn" onClick={() => cambiar({ filtros: {}, desde: '', hasta: '' })} disabled={!hayFiltros}>
-        <RotateCcw size={13} /> Limpiar
-      </button>
+      </div>
 
-      {resultados !== undefined && (
-        <div className={`filter-result-chip ${actualizando ? 'filter-result-chip-cargando' : ''}`}>
-          {actualizando
-            ? 'Actualizando…'
-            : <><strong>{resultados}</strong> {resultados === 1 ? 'registro' : 'registros'}</>}
-        </div>
-      )}
-
-      {error && <p className="filters-error" role="alert">{error}</p>}
+      {error &&<p className="filters-error" role="alert">{error}</p>}
     </div>
   )
 }

@@ -63,6 +63,15 @@ export async function iniciarSesion(usuario, clave) {
   return sesion
 }
 
+// La respuesta no revela si la cuenta existe
+export function solicitarRecuperacion(usuario) {
+  return llamar('/api/clave/solicitar', { usuario })
+}
+
+export function restablecerClave(token, clave) {
+  return llamar('/api/clave/restablecer', { token, clave })
+}
+
 export function cerrarSesion() {
   try {
     sessionStorage.removeItem(CLAVE_SESION)
@@ -93,4 +102,91 @@ export function obtenerCatalogo() {
 // Vuelve a ejecutar un reporte con otros filtros; no pasa por la IA
 export function reejecutarReporte(pregunta, plan) {
   return llamar('/api/reportes', { pregunta, plan }, tokenActual())
+}
+
+export function obtenerPerfil() {
+  return llamar('/api/perfil', undefined, tokenActual())
+}
+
+// Administración: el backend exige superadministrador en cada una
+export function listarUsuarios() {
+  return llamar('/api/usuarios', undefined, tokenActual())
+}
+
+export function crearUsuario(datos) {
+  return llamar('/api/usuarios', datos, tokenActual())
+}
+
+export function actualizarUsuario(usuario, datos) {
+  return llamar(`/api/usuarios/${encodeURIComponent(usuario)}`, datos, tokenActual())
+}
+
+export function enviarEnlaceClave(usuario) {
+  return llamar(`/api/usuarios/${encodeURIComponent(usuario)}/enlace-clave`, {}, tokenActual())
+}
+
+// Formulario público del inicio de sesión
+export function obtenerAreas() {
+  return llamar('/api/areas')
+}
+
+export function enviarSolicitudAcceso(datos) {
+  return llamar('/api/solicitudes-acceso', datos)
+}
+
+export function listarSolicitudes() {
+  return llamar('/api/solicitudes-acceso', undefined, tokenActual())
+}
+
+export function aprobarSolicitud(id, datos) {
+  return llamar(`/api/solicitudes-acceso/${id}/aprobar`, datos, tokenActual())
+}
+
+export function rechazarSolicitud(id) {
+  return llamar(`/api/solicitudes-acceso/${id}/rechazar`, {}, tokenActual())
+}
+
+// Las formas de las regiones no cambian: se piden una vez por sesión
+let mapaChile = null
+export function obtenerMapaChile() {
+  mapaChile ??= llamar('/api/mapa-chile', undefined, tokenActual()).catch((err) => {
+    mapaChile = null
+    throw err
+  })
+  return mapaChile
+}
+
+// Descarga el reporte. `formato` = 'html' o 'powerbi'; `graficos` = [{ titulo, plan }].
+const EXPORTACIONES = {
+  html: { ruta: '/api/reporte-html', archivo: 'Reporte_BI_Copilot.html' },
+  powerbi: { ruta: '/api/powerbi', archivo: 'BI_Copilot_PowerBI.zip' },
+}
+
+export async function descargarReporte(formato, titulo, graficos) {
+  const { ruta, archivo } = EXPORTACIONES[formato]
+  const token = tokenActual()
+  let res
+  try {
+    res = await fetch(`${API_URL}${ruta}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ titulo, graficos }),
+    })
+  } catch (err) {
+    console.error(`[api] No se pudo conectar con el backend (${ruta}).`, err)
+    throw new ErrorApi(0, 'Sin conexión con el backend')
+  }
+  if (!res.ok) {
+    if (res.status === 401) cerrarSesion()
+    const { detail } = await res.json().catch(() => ({}))
+    throw new ErrorApi(res.status, typeof detail === 'string' ? detail : 'No se pudo generar el archivo.')
+  }
+  const url = URL.createObjectURL(await res.blob())
+  const enlace = document.createElement('a')
+  enlace.href = url
+  enlace.download = archivo
+  document.body.appendChild(enlace)
+  enlace.click()
+  enlace.remove()
+  URL.revokeObjectURL(url)
 }

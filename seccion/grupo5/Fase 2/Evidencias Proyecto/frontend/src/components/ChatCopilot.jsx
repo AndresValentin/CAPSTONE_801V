@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { EXTENSIONES_ACEPTADAS } from '../lib/importacion.js'
 import { METRICAS, DIMENSIONES, VISUALIZACIONES, completarReporte } from '../data/mockData.js'
+import { reportesDe } from '../hooks/useConversaciones.js'
 import './ChatCopilot.css'
 
 const SUGERENCIAS = [
@@ -33,18 +34,28 @@ function guiaDesdeCatalogo(catalogo) {
   ]
 }
 
-function sugerenciasDesdeCatalogo(catalogo) {
+function sugerenciasDesdeCatalogo(catalogo, area) {
   const dominios = catalogo?.dominios ?? []
   if (dominios.length === 0) return SUGERENCIAS
-  const sugerencias = dominios.flatMap((d) => {
-    const [primera, segunda = primera] = d.metricas
-    const agrupar = d.filtros.find((f) => f.campo === 'region') ?? d.filtros[0]
-    return [
-      agrupar && `Genera un reporte de ${segunda.etiqueta.toLowerCase()} por ${agrupar.etiqueta.toLowerCase()} en barras`,
-      d.fecha && `Genera un reporte de ${primera.etiqueta.toLowerCase()} por mes en líneas`,
-    ].filter(Boolean)
-  })
-  return sugerencias.slice(0, 4)
+  const delArea = dominios.find((d) => d.codigo === area)
+  if (delArea) return delArea.recomendaciones.slice(0, 4).map((r) => r.pregunta)
+  return dominios.flatMap((d) => d.recomendaciones.slice(0, 2).map((r) => r.pregunta))
+}
+
+// Gráficos del área en pantalla que aún no están en este reporte
+function siguientesGraficos(catalogo, conversacion, area) {
+  const reportes = reportesDe(conversacion)
+  const codigo = area || reportes.at(-1)?.interpretacion?.codDominio
+  const dominio = catalogo?.dominios.find((d) => d.codigo === codigo)
+  if (!dominio) return { area: '', lista: [] }
+  const clave = (metrica, agruparPor) => `${metrica}|${agruparPor}`
+  const hechos = new Set(reportes
+    .filter((r) => r.interpretacion.codDominio === dominio.codigo)
+    .map((r) => clave(r.interpretacion.metrica, r.interpretacion.agruparPor)))
+  return {
+    area: dominio.nombre,
+    lista: dominio.recomendaciones.filter((r) => !hechos.has(clave(r.metrica, r.agruparPor))).slice(0, 3),
+  }
 }
 
 function detalleReporte(interpretacion) {
@@ -117,20 +128,21 @@ function MensajeAsistente({ m, sugerencias, reporteActivoId, onVerReporte, onRes
 }
 
 export default function ChatCopilot({
-  conversacion, catalogo, pensando, reporteActivoId, onEnviar, onAdjuntar, onVerReporte, onNuevoChat,
+  conversacion, catalogo, pensando, reporteActivoId, areaActiva, onEnviar, onAdjuntar, onVerReporte, onNuevoChat,
 }) {
   const guia = guiaDesdeCatalogo(catalogo)
-  const sugerencias = sugerenciasDesdeCatalogo(catalogo)
+  const sugerencias = sugerenciasDesdeCatalogo(catalogo, areaActiva)
   const [texto, setTexto] = useState('')
   const [arrastrando, setArrastrando] = useState(false)
   const listRef = useRef(null)
   const fileRef = useRef(null)
   const { mensajes } = conversacion
   const vacio = mensajes.length === 0 && !pensando
+  const siguientes = siguientesGraficos(catalogo, conversacion, areaActiva)
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
-  }, [mensajes.length, pensando, conversacion.id])
+  }, [mensajes.length, pensando, conversacion.id, areaActiva])
 
   function enviar(contenido) {
     const limpio = contenido.trim()
@@ -192,10 +204,29 @@ export default function ChatCopilot({
             )}
             {m.rol === 'usuario' && m.tipo !== 'archivo' && <p>{m.texto}</p>}
             {m.rol === 'asistente' && (
-              <MensajeAsistente m={m} sugerencias={sugerencias} reporteActivoId={reporteActivoId} onVerReporte={onVerReporte} onResponder={enviar} />
+              <MensajeAsistente
+                m={m}
+                sugerencias={sugerencias}
+                reporteActivoId={reporteActivoId}
+                onVerReporte={onVerReporte}
+                onResponder={enviar}
+              />
             )}
           </div>
         ))}
+
+        {!vacio && !pensando && siguientes.lista.length > 0 && (
+          <div className="next-charts">
+            <span className="next-charts-title">Agrega un gráfico de {siguientes.area}</span>
+            <div className="quick-replies">
+              {siguientes.lista.map((r) => (
+                <button key={r.pregunta} type="button" className="suggestion-chip" title={r.motivo} onClick={() => enviar(r.pregunta)}>
+                  {r.pregunta}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {pensando && (
           <div className="chat-bubble chat-asistente chat-thinking">

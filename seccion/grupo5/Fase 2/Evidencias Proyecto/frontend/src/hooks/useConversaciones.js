@@ -23,6 +23,11 @@ export function reportesDe(conversacion) {
   return conversacion.mensajes.filter((m) => m.tipo === 'validado')
 }
 
+// Los gráficos del reporte: respuestas con datos de la BD que no se quitaron
+export function graficosDe(conversacion) {
+  return reportesDe(conversacion).filter((m) => m.resultado && m.plan && !m.oculto)
+}
+
 // Historial de chats con IA (RF-08). Hoy vive en localStorage; cuando exista
 // backend, cargar/guardar se reemplazan por GET/POST a /api/conversaciones.
 // `usuario` separa el historial: en un mismo navegador, cada usuario ve solo sus
@@ -56,6 +61,10 @@ export function useConversaciones(usuario) {
     })))
   }
 
+  function renombrarConversacion(conversacionId, titulo) {
+    setConversaciones((prev) => prev.map((c) => (c.id === conversacionId ? { ...c, titulo } : c)))
+  }
+
   function nuevaConversacion() {
     // Igual que en Claude: si el chat actual está vacío no se crea otro
     if (activa.mensajes.length === 0) return activa
@@ -80,6 +89,7 @@ export function useConversaciones(usuario) {
     seleccionar: setActivaId,
     agregarMensaje,
     actualizarMensaje,
+    renombrarConversacion,
     nuevaConversacion,
     eliminarConversacion,
   }

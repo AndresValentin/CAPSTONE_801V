@@ -6,10 +6,11 @@ import FiltersPanel from '../components/FiltersPanel.jsx'
 import DashboardPanel from '../components/DashboardPanel.jsx'
 import ChatCopilot from '../components/ChatCopilot.jsx'
 import ReportTemplate from '../components/ReportTemplate.jsx'
+import ReporteGraficos from '../components/ReporteGraficos.jsx'
 import ReporteBD from '../components/ReporteBD.jsx'
 import FiltrosBD from '../components/FiltrosBD.jsx'
 import { FILTROS_INICIALES, completarFiltros, filtrarSiniestros, siniestrosBase } from '../data/mockData.js'
-import { useConversaciones, reportesDe } from '../hooks/useConversaciones.js'
+import { useConversaciones, reportesDe, graficosDe } from '../hooks/useConversaciones.js'
 import {
   cerrarSesion, interpretar, leerSesion, obtenerCatalogo, reejecutarReporte, usaBackend,
 } from '../lib/api.js'
@@ -30,6 +31,11 @@ function panelDesdePlan(plan) {
   }
 }
 
+// El reporte que se abre al entrar a un chat. Con backend no cuenta los que se quitaron.
+function ultimoReporte(conversacion) {
+  return (usaBackend ? graficosDe(conversacion).at(-1) : reportesDe(conversacion).at(-1)) ?? null
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const [sesion] = useState(leerSesion)
@@ -38,7 +44,7 @@ export default function Dashboard() {
   const activaIdRef = useRef(chats.activa.id)
   useEffect(() => { activaIdRef.current = chats.activa.id }, [chats.activa.id])
   // Al entrar se muestra el último reporte del chat activo; un chat vacío muestra la plantilla
-  const [reporteActivo, setReporteActivo] = useState(() => reportesDe(chats.activa).at(-1) ?? null)
+  const [reporteActivo, setReporteActivo] = useState(() => ultimoReporte(chats.activa))
   const [filtros, setFiltros] = useState(() => reporteActivo?.filtros ?? FILTROS_INICIALES)
   const [importados, setImportados] = useState(() => leerLocal(CLAVE_IMPORTADOS, []))
   const [pensandoEn, setPensandoEn] = useState(null)
@@ -121,6 +127,60 @@ export default function Dashboard() {
     }
   }
 
+  const graficos = graficosDe(chats.activa)
+  // El área en pantalla orienta las recomendaciones y las preguntas que no indiquen otra
+  const areaActiva = panel.dominio || reporteActivo?.plan?.dominio || ''
+  const filtrosReporte = usaBackend && (
+    <FiltrosBD
+      catalogo={catalogoBD}
+      panel={panel}
+      onCambiar={cambiarPanel}
+      onCambiarArea={cambiarArea}
+      resultados={reporteActivo?.resultado?.cantidad}
+      actualizando={estadoPanel.actualizando}
+      error={estadoPanel.error}
+      titulo={reporteActivo?.esVistaArea ? 'Filtros del área' : graficos.length > 0 ? 'Filtros del gráfico seleccionado' : 'Filtros'}
+    />
+  )
+
+  // Al elegir un área se abre su último gráfico del reporte; si no tiene, se muestran
+  // el total y el listado de esa área, sin agregar nada al reporte ni pasar por la IA.
+  async function cambiarArea(codigo) {
+    const existente = graficos.filter((g) => g.plan.dominio === codigo).at(-1)
+    if (existente) {
+      verReporte(existente)
+      return
+    }
+    setPanel({ ...PANEL_VACIO, dominio: codigo })
+    const area = catalogoBD.dominios.find((d) => d.codigo === codigo)
+    const numero = ++ultimoRecalculo.current
+    setEstadoPanel({ actualizando: true, error: '' })
+    const plan = {
+      accion: 'consultar', motivo_rechazo: '', dominio: codigo, titulo: area.nombre, metrica: area.metricas[0].clave,
+      agrupar_por: 'ninguno', filtros: [], desde: '', hasta: '', tipo_salida: 'kpi',
+    }
+    try {
+      const r = await reejecutarReporte(`Resumen de ${area.nombre}`, plan)
+      if (numero !== ultimoRecalculo.current) return
+      if (r.estado !== 'validado') {
+        setEstadoPanel({ actualizando: false, error: r.motivo })
+        return
+      }
+      setReporteActivo({
+        id: `area-${codigo}`, esVistaArea: true, pregunta: area.nombre,
+        plan: r.plan, interpretacion: r.interpretacion, resultado: r.resultado,
+      })
+      setEstadoPanel({ actualizando: false, error: '' })
+    } catch (err) {
+      if (numero !== ultimoRecalculo.current) return
+      if (err.estado === 401) {
+        salir()
+        return
+      }
+      setEstadoPanel({ actualizando: false, error: 'No se pudieron cargar los datos del área. Intenta nuevamente.' })
+    }
+  }
+
   const dataset = useMemo(() => [...siniestrosBase, ...importados], [importados])
   const datosFiltrados = useMemo(() => filtrarSiniestros(dataset, filtros), [dataset, filtros])
 
@@ -132,6 +192,27 @@ export default function Dashboard() {
     setReporteActivo(mensaje)
   }
 
+  function abrirReporte(mensaje, conversacionId) {
+    // Abrir desde el chat un gráfico quitado lo devuelve al reporte
+    if (mensaje.oculto) {
+      chats.actualizarMensaje(conversacionId ?? chats.activa.id, mensaje.id, { oculto: false })
+    }
+    verReporte({ ...mensaje, oculto: false }, conversacionId)
+  }
+
+  function quitarDelReporte(mensaje) {
+    chats.actualizarMensaje(chats.activa.id, mensaje.id, { oculto: true })
+    if (mensaje.id !== reporteActivo?.id) return
+    const siguiente = graficosDe(chats.activa).filter((r) => r.id !== mensaje.id).at(-1)
+    if (siguiente) {
+      verReporte(siguiente)
+    } else {
+      descartarRecalculos()
+      setPanel(PANEL_VACIO)
+      setReporteActivo(null)
+    }
+  }
+
   function cerrarSidebarEnMovil() {
     if (window.innerWidth <= 900) setSidebarAbierto(false)
   }
@@ -140,7 +221,7 @@ export default function Dashboard() {
     chats.seleccionar(id)
     cerrarSidebarEnMovil()
     const conversacion = chats.conversaciones.find((c) => c.id === id)
-    const ultimo = conversacion && reportesDe(conversacion).at(-1)
+    const ultimo = conversacion && ultimoReporte(conversacion)
     if (ultimo) {
       verReporte(ultimo)
     } else {
@@ -174,8 +255,10 @@ export default function Dashboard() {
     setPensandoEn(conversacionId)
 
     try {
-      const { dominio: _dominio, ...filtrosPanel } = panel
-      const resultado = await interpretar(pregunta, filtrosPanel)
+      // Con un gráfico seleccionado, el panel muestra los filtros de ese gráfico: no deben
+      // heredarlos los siguientes. Solo aplica en la plantilla, antes del primer gráfico.
+      const { dominio: _dominio, ...filtrosPanel } = graficos.length > 0 ? PANEL_VACIO : panel
+      const resultado = await interpretar(pregunta, { ...filtrosPanel, area: areaActiva })
       if (resultado.estado === 'validado') {
         const mensaje = chats.agregarMensaje(conversacionId, {
           rol: 'asistente',
@@ -295,32 +378,40 @@ export default function Dashboard() {
           totalImportados={importados.length}
           onLimpiarImportados={() => setImportados([])}
           datos={datosFiltrados}
+          sesion={sesion}
+          onSalir={salir}
         />
         {sidebarAbierto && <div className="sidebar-backdrop" onClick={() => setSidebarAbierto(false)} />}
 
         <main className="workspace">
           <div className="main-column">
-            {usaBackend && (
-              <FiltrosBD
-                catalogo={catalogoBD}
-                panel={panel}
-                onCambiar={cambiarPanel}
-                resultados={reporteActivo?.resultado?.cantidad}
+            {graficos.length > 0 ? (
+              <ReporteGraficos
+                titulo={chats.activa.titulo}
+                reportes={graficos}
+                activo={reporteActivo}
+                filtros={filtrosReporte}
                 actualizando={estadoPanel.actualizando}
-                error={estadoPanel.error}
+                onSeleccionar={abrirReporte}
+                onQuitar={quitarDelReporte}
+                onRenombrar={(titulo) => chats.renombrarConversacion(chats.activa.id, titulo)}
+                onSesionExpirada={salir}
               />
-            )}
-            {reporteActivo?.resultado ? (
-              <ReporteBD reporte={reporteActivo} actualizando={estadoPanel.actualizando} />
-            ) : reporteActivo ? (
+            ) : reporteActivo?.esVistaArea ? (
+              <div className="reporte-vista">
+                {filtrosReporte}
+                <ReporteBD reporte={reporteActivo} actualizando={estadoPanel.actualizando} mostrarGrafico={false} />
+              </div>
+            ) : !usaBackend && reporteActivo ? (
               <>
-                {!usaBackend && (
-                  <FiltersPanel filtros={filtros} setFiltros={setFiltros} resultados={datosFiltrados.length} />
-                )}
+                <FiltersPanel filtros={filtros} setFiltros={setFiltros} resultados={datosFiltrados.length} />
                 <DashboardPanel datos={datosFiltrados} filtros={filtros} reporte={reporteActivo} />
               </>
             ) : (
-              <ReportTemplate />
+              <>
+                {filtrosReporte}
+                <ReportTemplate />
+              </>
             )}
           </div>
 
@@ -329,9 +420,10 @@ export default function Dashboard() {
             catalogo={catalogoBD}
             pensando={pensandoEn === chats.activa.id}
             reporteActivoId={reporteActivo?.id}
+            areaActiva={usaBackend ? areaActiva : ''}
             onEnviar={enviarPregunta}
             onAdjuntar={importarArchivo}
-            onVerReporte={verReporte}
+            onVerReporte={abrirReporte}
             onNuevoChat={nuevoChat}
           />
         </main>

@@ -67,15 +67,17 @@ def _primer_dia(mes: str) -> date:
     return date(int(anio), int(numero), 1)
 
 
-def construir_sql(plan: PlanConsulta, cat: catalogo.Catalogo) -> dict[str, tuple[str, list]]:
-    """Arma las consultas del reporte solo con fragmentos del catálogo; los
-    valores van como parámetros. Devuelve {nombre: (sql, params)}:
-    serie (para el gráfico), total (KPI) y detalle (tabla de registros)."""
-    dominio = cat.disponibles[plan.dominio]
-    metrica = dominio.sql_medida(plan.metrica)
-    dimension = dominio.sql_dimension(plan.agrupar_por)
-    fecha = catalogo.sql_columna(dominio.definicion.fecha.columna)
+def normalizar_salida(plan: PlanConsulta) -> PlanConsulta:
+    """El mapa solo tiene sentido por región; con otra agrupación se usan barras."""
+    if plan.tipo_salida == "grafico_mapa" and plan.agrupar_por != "region":
+        return plan.model_copy(update={"tipo_salida": "grafico_barras"})
+    return plan
 
+
+def filtros_sql(plan: PlanConsulta, cat: catalogo.Catalogo) -> tuple[str, list]:
+    """Cláusula WHERE del plan, armada con columnas del catálogo, y sus parámetros."""
+    dominio = cat.disponibles[plan.dominio]
+    fecha = catalogo.sql_columna(dominio.definicion.fecha.columna)
     condiciones, params = [], []
     for f in plan.filtros:
         condiciones.append(f"{catalogo.sql_columna(dominio.atributos[f.campo].columna)} = ?")
@@ -86,7 +88,18 @@ def construir_sql(plan: PlanConsulta, cat: catalogo.Catalogo) -> dict[str, tuple
     if plan.hasta:
         condiciones.append(f"{fecha} < DATEADD(MONTH, 1, ?)")
         params.append(_primer_dia(plan.hasta))
-    where = " WHERE " + " AND ".join(condiciones) if condiciones else ""
+    return (" WHERE " + " AND ".join(condiciones) if condiciones else ""), params
+
+
+def construir_sql(plan: PlanConsulta, cat: catalogo.Catalogo) -> dict[str, tuple[str, list]]:
+    """Arma las consultas del reporte solo con fragmentos del catálogo; los
+    valores van como parámetros. Devuelve {nombre: (sql, params)}:
+    serie (para el gráfico), total (KPI) y detalle (tabla de registros)."""
+    dominio = cat.disponibles[plan.dominio]
+    metrica = dominio.sql_medida(plan.metrica)
+    dimension = dominio.sql_dimension(plan.agrupar_por)
+    fecha = catalogo.sql_columna(dominio.definicion.fecha.columna)
+    where, params = filtros_sql(plan, cat)
     origen = dominio.sql_from()
 
     consultas = {

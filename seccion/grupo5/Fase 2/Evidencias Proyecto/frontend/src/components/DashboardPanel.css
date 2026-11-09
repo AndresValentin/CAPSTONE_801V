@@ -23,13 +23,22 @@
 }
 
 .badge-validado {
-  background: #dcfce7;
+  background: var(--color-success-soft);
   color: var(--color-success);
 }
 
 .badge-rechazado {
-  background: #fee2e2;
+  background: var(--color-danger-soft);
   color: var(--color-danger);
+}
+
+.reporte-aviso {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-md);
 }
 
 .active-filters {
@@ -57,7 +66,7 @@
 
 .kpi-card {
   position: relative;
-  background: #fafbfe;
+  background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 16px;
@@ -216,7 +225,7 @@ thead th {
 
 tbody td {
   padding: 9px 10px;
-  border-bottom: 1px solid #f1f2f7;
+  border-bottom: 1px solid var(--color-line);
   white-space: nowrap;
 }
 
@@ -227,10 +236,10 @@ tbody td {
   border-radius: 999px;
 }
 
-.status-Aprobado { background: #dcfce7; color: #16a34a; }
-.status-Pagado { background: #dbeafe; color: #2563eb; }
-.status-Rechazado { background: #fee2e2; color: #dc2626; }
-.status-En-revisión { background: #fef3c7; color: #d97706; }
+.status-Aprobado { background: var(--color-success-soft); color: var(--color-success); }
+.status-Pagado { background: var(--color-info-soft); color: var(--color-info); }
+.status-Rechazado { background: var(--color-danger-soft); color: var(--color-danger); }
+.status-En-revisión { background: var(--color-warning-soft); color: var(--color-warning); }
 
 @media (max-width: 640px) {
   .kpi-row {

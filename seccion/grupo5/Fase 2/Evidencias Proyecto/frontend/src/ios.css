@@ -1,0 +1,210 @@
+/* Estilo iOS: capa opcional. Todo depende de data-look="ios" en <html>, así que
+   apagarla desde el perfil deja la interfaz exactamente como sin este archivo. */
+
+:root[data-look='ios'] {
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 12px 34px rgba(0, 0, 0, 0.14);
+}
+
+:root[data-look='ios']:not([data-theme='dark']) {
+  --color-bg: #f2f2f7;
+  --color-surface-2: #f2f2f7;
+  --color-surface-3: #e9e9ef;
+  --color-sidebar: rgba(246, 246, 250, 0.78);
+  --color-hover: rgba(120, 120, 128, 0.12);
+  --color-line: rgba(60, 60, 67, 0.1);
+  --color-border: rgba(60, 60, 67, 0.14);
+  --color-text-muted: #6e6e73;
+  --chart-grid: rgba(60, 60, 67, 0.1);
+}
+
+:root[data-look='ios'][data-theme='dark'] {
+  --color-bg: #000;
+  --color-surface: #1c1c1e;
+  --color-surface-2: #2c2c2e;
+  --color-surface-3: #2c2c2e;
+  --color-sidebar: rgba(28, 28, 30, 0.78);
+  --color-hover: rgba(120, 120, 128, 0.24);
+  --color-line: rgba(84, 84, 88, 0.4);
+  --color-border: rgba(84, 84, 88, 0.55);
+  --color-text: #f5f5f7;
+  --color-text-muted: #98989f;
+  --chart-grid: rgba(84, 84, 88, 0.4);
+  --chart-cursor: rgba(120, 120, 128, 0.2);
+}
+
+:root[data-look='ios'] body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', system-ui, sans-serif;
+  letter-spacing: -0.008em;
+}
+
+/* Barra lateral y menús translúcidos */
+:root[data-look='ios'] .sidebar {
+  background: var(--color-sidebar);
+  backdrop-filter: saturate(180%) blur(22px);
+}
+
+:root[data-look='ios'] .perfil-menu {
+  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  backdrop-filter: saturate(180%) blur(24px);
+  border-color: transparent;
+}
+
+/* Tarjetas agrupadas, sin bordes marcados */
+:root[data-look='ios'] .filters-bar,
+:root[data-look='ios'] .dashboard-panel,
+:root[data-look='ios'] .report-template,
+:root[data-look='ios'] .chat-copilot,
+:root[data-look='ios'] .reporte-grafico,
+:root[data-look='ios'] .login-panel-inner {
+  border-color: transparent;
+  box-shadow: var(--shadow-sm);
+}
+
+:root[data-look='ios'] .login-panel-inner {
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.1);
+}
+
+:root[data-look='ios'] .reporte-grafico {
+  border-radius: var(--radius-lg);
+  padding: 18px;
+}
+
+:root[data-look='ios'] .reporte-grafico-activo {
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+:root[data-look='ios'] .kpi-card,
+:root[data-look='ios'] .table-card {
+  border-color: transparent;
+  background: var(--color-surface-2);
+}
+
+/* Campos rellenos */
+:root[data-look='ios'] .filter-field select,
+:root[data-look='ios'] .filter-field input,
+:root[data-look='ios'] .login-form input[type='text'],
+:root[data-look='ios'] .login-form input[type='password'],
+:root[data-look='ios'] .modal-campo input,
+:root[data-look='ios'] .modal-campo textarea,
+:root[data-look='ios'] .chat-input-row input[type='text'] {
+  background: var(--color-surface-2);
+  border-color: transparent;
+  border-radius: 11px;
+}
+
+:root[data-look='ios'] .filter-field select:focus,
+:root[data-look='ios'] .filter-field input:focus,
+:root[data-look='ios'] .login-form input:focus,
+:root[data-look='ios'] .modal-campo input:focus,
+:root[data-look='ios'] .modal-campo textarea:focus {
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+
+/* Botones */
+:root[data-look='ios'] .btn-primary,
+:root[data-look='ios'] .btn-powerbi,
+:root[data-look='ios'] .modal-boton,
+:root[data-look='ios'] .usuarios-nuevo {
+  border-radius: 13px;
+  font-weight: 600;
+  transition: transform 0.12s ease, opacity 0.12s ease, background 0.15s ease;
+}
+
+:root[data-look='ios'] .btn-primary:active,
+:root[data-look='ios'] .btn-powerbi:active,
+:root[data-look='ios'] .modal-boton:active,
+:root[data-look='ios'] .usuarios-nuevo:active,
+:root[data-look='ios'] .suggestion-chip:active {
+  transform: scale(0.97);
+  opacity: 0.85;
+}
+
+/* Chat con burbujas redondas */
+:root[data-look='ios'] .chat-bubble {
+  border-radius: 20px;
+}
+
+:root[data-look='ios'] .chat-usuario {
+  border-bottom-right-radius: 6px;
+}
+
+:root[data-look='ios'] .chat-asistente {
+  border-bottom-left-radius: 6px;
+}
+
+:root[data-look='ios'] .interpretation-card {
+  border-color: transparent;
+  border-radius: 14px;
+}
+
+/* Interruptores */
+:root[data-look='ios'] .perfil-switch {
+  width: 42px;
+  height: 25px;
+  background: var(--color-hover);
+}
+
+:root[data-look='ios'] .perfil-switch::after {
+  top: 2px;
+  left: 2px;
+  width: 21px;
+  height: 21px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+}
+
+:root[data-look='ios'] .perfil-switch-on {
+  background: #34c759;
+}
+
+:root[data-look='ios'] .perfil-switch-on::after {
+  transform: translateX(17px);
+}
+
+/* Ventanas */
+:root[data-look='ios'] .modal-recuperar {
+  border-radius: 22px;
+}
+
+:root[data-look='ios'] .modal-recuperar::backdrop {
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(6px);
+}
+
+@media (max-width: 640px) {
+  /* En el celular, las ventanas suben desde abajo */
+  :root[data-look='ios'] .modal-recuperar {
+    width: 100%;
+    max-width: 100%;
+    margin: auto 0 0;
+    border-radius: 22px 22px 0 0;
+    animation: ios-hoja 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  :root[data-look='ios'] .modal-recuperar::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 5px;
+    margin: 8px auto 0;
+    background: var(--color-hover);
+    border-radius: 999px;
+  }
+}
+
+@keyframes ios-hoja {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-look='ios'] .modal-recuperar {
+    animation: none;
+  }
+}

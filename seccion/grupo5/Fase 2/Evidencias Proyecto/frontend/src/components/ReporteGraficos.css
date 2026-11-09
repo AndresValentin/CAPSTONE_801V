@@ -1,0 +1,228 @@
+.reporte-vista {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.reporte-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reporte-barra h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 17px;
+  color: var(--color-primary);
+}
+
+.reporte-renombrar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.reporte-renombrar:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.reporte-titulo-input {
+  width: min(420px, 100%);
+  padding: 5px 9px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: 8px;
+  outline: none;
+}
+
+.reporte-barra p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.reporte-exportar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.reporte-exportar-botones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-exportar-secundario {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.btn-powerbi {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary-fill);
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-powerbi:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-powerbi:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.reporte-grilla {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  align-items: start;
+  gap: 14px;
+}
+
+.reporte-grafico-ampliado {
+  grid-column: 1 / -1;
+}
+
+/* El mapa es alto: ocupa dos filas para que a su lado quepan dos gráficos normales */
+.reporte-grafico-mapa {
+  grid-row: span 2;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+
+.reporte-grafico-mapa .mapa-chile {
+  margin: auto 0;
+}
+
+.reporte-grafico {
+  min-width: 0;
+  background: var(--color-surface);
+}
+
+.reporte-grafico h3 {
+  color: var(--color-text);
+  font-size: 13.5px;
+}
+
+.reporte-grafico-cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.reporte-grafico-cabecera > div:first-child {
+  min-width: 0;
+}
+
+.reporte-grafico-area {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  border-radius: 999px;
+}
+
+.reporte-grafico-cabecera h3 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reporte-grafico-cabecera p {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+.reporte-grafico-acciones {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.reporte-grafico-acciones button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.reporte-grafico-acciones button:hover,
+.reporte-grafico-acciones button[aria-pressed='true'] {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.reporte-grafico-activo {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+@media (max-width: 640px) {
+  .reporte-grilla {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reporte-grafico-mapa {
+    grid-row: auto;
+  }
+
+  .reporte-barra {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reporte-exportar {
+    align-items: stretch;
+  }
+
+  .reporte-exportar-botones {
+    flex-direction: column;
+  }
+
+  .btn-powerbi {
+    justify-content: center;
+  }
+}

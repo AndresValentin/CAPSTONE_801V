@@ -1,0 +1,39 @@
+USE DB_BI_RUTA_SMART;
+GO
+
+-- Solicitudes de acceso enviadas desde el inicio de sesión. Se puede ejecutar más de una vez.
+IF OBJECT_ID('seguridad.SEG_SOLICITUD_ACCESO') IS NULL
+    CREATE TABLE seguridad.SEG_SOLICITUD_ACCESO
+    (
+        ID_SOLICITUD INT IDENTITY(1,1) NOT NULL,
+
+        DESC_NOMBRE VARCHAR(100) NOT NULL,
+
+        DESC_CORREO VARCHAR(254) NOT NULL,
+
+        DESC_AREAS VARCHAR(100) NOT NULL,
+
+        DESC_MOTIVO NVARCHAR(500) NOT NULL,
+
+        -- Hash de la IP: sirve para limitar solicitudes sin guardar la dirección
+        DESC_IP_HASH CHAR(64) NOT NULL,
+
+        COD_ESTADO VARCHAR(10) NOT NULL
+            CONSTRAINT DF_SEG_SOLICITUD_ACCESO_ESTADO
+            DEFAULT ('PENDIENTE'),
+
+        DT_CREADO DATETIME2 NOT NULL
+            CONSTRAINT DF_SEG_SOLICITUD_ACCESO_CREADO
+            DEFAULT (SYSUTCDATETIME()),
+
+        DT_RESUELTO DATETIME2 NULL,
+
+        COD_RESUELTO_POR VARCHAR(50) NULL,
+
+        CONSTRAINT PK_SEG_SOLICITUD_ACCESO
+            PRIMARY KEY (ID_SOLICITUD),
+
+        CONSTRAINT CK_SEG_SOLICITUD_ACCESO_ESTADO
+            CHECK (COD_ESTADO IN ('PENDIENTE', 'APROBADA', 'RECHAZADA'))
+    );
+GO

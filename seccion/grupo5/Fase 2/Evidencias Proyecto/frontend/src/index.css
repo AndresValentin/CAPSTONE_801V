@@ -29,7 +29,75 @@
   --radius-lg: 20px;
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
   --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.08);
+  --color-surface-2: #fafbfe;
+  --color-surface-3: #f4f5fb;
+  --color-sidebar: #f7f8fc;
+  --color-hover: #eceef6;
+  --color-line: #f1f2f7;
+  --color-primary-fill: #1e2a5e;
+
+  --chart-grid: #eef0f5;
+  --chart-barra: #1e2a5e;
+  --chart-linea: #0d9488;
+  --chart-cursor: #f4f6fb;
+  --serie-1: #2563eb;
+  --serie-2: #0d9488;
+  --serie-3: #d97706;
+  --serie-4: #7c3aed;
+  --serie-5: #db2777;
+  --serie-otros: #94a3b8;
+  --mapa-bajo: #bfd4f7;
+  --mapa-alto: #1e3a8a;
+  --mapa-vacio: #e8ebf1;
   color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #0f1426;
+  --color-surface: #171d33;
+  --color-surface-2: #1c2340;
+  --color-surface-3: #202846;
+  --color-sidebar: #131830;
+  --color-hover: #262f52;
+  --color-line: #242c4a;
+  --color-border: #2b3456;
+  --color-text: #e7eaf5;
+  --color-text-muted: #9aa3bd;
+
+  --color-primary: #b3c0ff;
+  --color-primary-fill: #3b4fb0;
+  --color-primary-dark: #4a60c8;
+  --color-primary-soft: #262f57;
+  --color-accent: #2dd4bf;
+  --color-accent-dark: #2dd4bf;
+  --color-accent-soft: #12302f;
+
+  --color-success: #4ade80;
+  --color-success-soft: #14321f;
+  --color-warning: #fbbf24;
+  --color-warning-soft: #3a2c10;
+  --color-danger: #f87171;
+  --color-danger-soft: #3d1a1d;
+  --color-info: #60a5fa;
+  --color-info-soft: #172a4a;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  --chart-grid: #2a3352;
+  --chart-barra: #6f8ef0;
+  --chart-linea: #2dd4bf;
+  --chart-cursor: #222a49;
+  --serie-1: #3b82f6;
+  --serie-2: #0d9f90;
+  --serie-3: #d97706;
+  --serie-4: #a855f7;
+  --serie-5: #ec4899;
+  --serie-otros: #64708c;
+  --mapa-bajo: #2a3a70;
+  --mapa-alto: #8fb8ff;
+  --mapa-vacio: #262d48;
+  color-scheme: dark;
 }
 
 * {
@@ -57,7 +125,7 @@ button {
 }
 
 .btn-primary {
-  background: var(--color-primary);
+  background: var(--color-primary-fill);
   color: #fff;
   border: none;
   border-radius: var(--radius-md);

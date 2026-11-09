@@ -36,12 +36,12 @@
 
 .import-summary-ok {
   background: var(--color-success-soft);
-  color: #15803d;
+  color: var(--color-success);
 }
 
 .import-summary-warn {
   background: var(--color-warning-soft);
-  color: #b45309;
+  color: var(--color-warning);
 }
 
 .import-summary-row {

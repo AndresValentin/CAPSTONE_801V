@@ -99,6 +99,7 @@ Python convierte ese plan en SQL. Así:
    | `USR_ADMIN` | Los tres |
 
    En la BD solo se guarda el hash de la clave (`DESC_CLAVE_HASH`), nunca la clave. Para cambiar una: `python -m app.claves "nueva clave"` y actualizar esa columna con el resultado.
+   Para recuperar contraseñas por correo: ejecutar `db/sqlserver/22_RECUPERACION_CLAVE.sql`, registrar el correo de cada usuario en `seguridad.SEG_USUARIO.DESC_CORREO` y completar las variables `SMTP_*` de `.env`. Sin `SMTP_HOST`, el enlace se muestra en la consola del backend.
    El login entrega un token firmado (8 horas). El backend saca el usuario de ese token, no de lo que mande el navegador, así que nadie puede hacerse pasar por `USR_ADMIN`.
    Sin `VITE_API_URL`, el frontend sigue funcionando en modo demo con las reglas locales de `src/lib/copilot.js`.
 

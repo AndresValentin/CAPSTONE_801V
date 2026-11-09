@@ -107,6 +107,7 @@ export const VISUALIZACIONES = {
   torta: 'Torta',
   kpi: 'KPI',
   tabla: 'Tabla',
+  mapa: 'Mapa',
 }
 
 function valorMetrica({ suma, cantidad }, metrica) {

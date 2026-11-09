@@ -11,7 +11,8 @@ function formatCelda(valor, esMoneda) {
 
 // Reporte armado con los datos que devolvió el backend (SQL Server).
 // A diferencia de DashboardPanel, no calcula nada: solo dibuja `resultado`.
-export default function ReporteBD({ reporte, actualizando = false }) {
+// Con `mostrarGrafico={false}` el gráfico ya está a la vista en ReporteGraficos.
+export default function ReporteBD({ reporte, actualizando = false, mostrarGrafico = true }) {
   const { interpretacion: i, resultado: r } = reporte
   const sinAgrupar = i.agruparPor === 'ninguno' || r.serie.length === 0
   const visualizacion = sinAgrupar ? 'kpi' : i.visualizacion
@@ -32,8 +33,14 @@ export default function ReporteBD({ reporte, actualizando = false }) {
             {i.dominio} · {i.metricaEtiqueta} · {i.dimensionEtiqueta} · {VISUALIZACIONES[i.visualizacion] ?? i.visualizacion} · {i.catalogoVersion}
           </p>
         </div>
-        <span className="badge badge-validado">Solicitud validada</span>
+        {!reporte.esVistaArea && <span className="badge badge-validado">Solicitud validada</span>}
       </div>
+
+      {reporte.esVistaArea && (
+        <p className="reporte-aviso">
+          Estás viendo todos los datos de esta área. Este reporte todavía no tiene un gráfico de {i.dominio}: pídelo en el chat para agregarlo.
+        </p>
+      )}
 
       {chips.length > 0 && (
         <div className="active-filters">
@@ -54,21 +61,23 @@ export default function ReporteBD({ reporte, actualizando = false }) {
         </div>
       </div>
 
-      <div className="chart-card chart-card-main">
-        <h3>{tituloGrafico}</h3>
-        {r.cantidad === 0
-          ? <p className="chart-empty">No hay registros con los filtros de esta solicitud.</p>
-          : (
-            <GraficoPrincipal
-              visualizacion={visualizacion}
-              serie={r.serie}
-              total={r.total}
-              esMoneda={i.moneda}
-              cantidad={r.cantidad}
-              unidad="registros"
-            />
-          )}
-      </div>
+      {mostrarGrafico && (
+        <div className="chart-card chart-card-main">
+          <h3>{tituloGrafico}</h3>
+          {r.cantidad === 0
+            ? <p className="chart-empty">No hay registros con los filtros de esta solicitud.</p>
+            : (
+              <GraficoPrincipal
+                visualizacion={visualizacion}
+                serie={r.serie}
+                total={r.total}
+                esMoneda={i.moneda}
+                cantidad={r.cantidad}
+                unidad="registros"
+              />
+            )}
+        </div>
+      )}
 
       <section className="table-card">
         <h3 className="table-card-title">

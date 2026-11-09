@@ -1,0 +1,239 @@
+.modal-usuarios {
+  width: min(820px, calc(100vw - 32px));
+}
+
+.usuarios-caja {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px 28px 28px;
+}
+
+.usuarios-cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.usuarios-cabecera .modal-texto {
+  margin: 0;
+}
+
+.modal-usuarios .usuarios-cerrar {
+  position: static;
+  flex-shrink: 0;
+}
+
+.usuarios-nuevo {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary-fill);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.usuarios-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.usuarios-barra .usuarios-nuevo {
+  align-self: center;
+}
+
+.usuarios-pestanas {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--color-hover);
+  border-radius: 10px;
+}
+
+.usuarios-pestanas button {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.usuarios-pestanas button[aria-pressed='true'] {
+  color: var(--color-text);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.usuarios-vacio {
+  margin: 0;
+  padding: 36px 0;
+  font-size: 14px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.usuarios-ok {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-success);
+}
+
+.usuarios-tabla {
+  overflow-x: auto;
+}
+
+.usuarios-tabla table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.usuarios-tabla th {
+  padding: 8px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.usuarios-tabla td {
+  padding: 10px 8px;
+  vertical-align: top;
+  white-space: normal;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.usuarios-tabla td strong,
+.usuarios-tabla td span {
+  display: block;
+}
+
+.usuarios-tabla td span {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+.usuarios-areas {
+  min-width: 130px;
+}
+
+.usuarios-botones {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.usuarios-botones button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.usuarios-botones button:hover:not(:disabled) {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.usuarios-botones button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.usuarios-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+  row-gap: 4px;
+}
+
+.usuarios-ancho {
+  grid-column: 1 / -1;
+}
+
+.modal-campo input:disabled {
+  color: var(--color-text-muted);
+  background: var(--color-surface-2);
+}
+
+.usuarios-grupo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0 0 14px;
+  padding: 0;
+  border: none;
+}
+
+.usuarios-grupo legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.usuarios-grupo label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+}
+
+.usuarios-nota {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.usuarios-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.usuarios-acciones .modal-boton {
+  width: auto;
+  min-width: 130px;
+  height: 44px;
+}
+
+.usuarios-secundario {
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+@media (max-width: 560px) {
+  .usuarios-caja {
+    padding: 18px;
+  }
+
+  .usuarios-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

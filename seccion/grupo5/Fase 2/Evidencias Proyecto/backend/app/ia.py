@@ -87,13 +87,13 @@ Catálogo:
 {cat.descripcion_para_ia(dominios_usuario)}
 
 Cómo armar el plan:
-- En "dominio" indica a qué dominio de negocio pertenece la pregunta (siniestros, reservas o recuperos -> SIN; primas o comisiones -> FIN; pólizas, clientes, cartera o montos asegurados -> SEG), aunque ese dominio no tenga detalle en el catálogo. Otro componente revisa si el usuario tiene acceso.
+- En "dominio" indica a qué dominio de negocio pertenece la pregunta (siniestros, reservas o recuperos -> SIN; primas o comisiones -> FIN; cuotas, cobranza, pagos pendientes o morosidad -> CUO; pólizas, clientes, cartera o montos asegurados -> SEG), aunque ese dominio no tenga detalle en el catálogo. Otro componente revisa si el usuario tiene acceso.
 - Si la pregunta es de un dominio sin detalle en el catálogo, usa "accion": "consultar" igual y completa el resto con cualquier valor válido.
 - Usa solo métricas, agrupaciones y campos de filtro del dominio elegido.
 - "filtros" lleva solo las restricciones que menciona la pregunta (lista vacía si no hay). "valor" debe ser exactamente uno de los valores listados para ese campo; si el usuario escribe distinto (por ejemplo "autos" o "abiertos"), usa el valor del catálogo equivalente.
 - "desde" y "hasta" van en formato AAAA-MM, o "" si la pregunta no menciona un período. Un mes puntual usa el mismo valor en ambos.
 - Elige "agrupar_por" según lo que se quiera comparar ("por región" -> region, "por mes" o evolución -> mes); si se pide un único número, "ninguno".
-- Elige "tipo_salida" acorde: un número -> kpi; comparación entre categorías -> grafico_barras; evolución en el tiempo -> grafico_lineas; distribución -> grafico_torta; listado -> tabla.
+- Elige "tipo_salida" acorde: un número -> kpi; comparación entre categorías -> grafico_barras; evolución en el tiempo -> grafico_lineas; distribución o reparto -> grafico_torta solo si hay 5 categorías o menos (con más, usa grafico_barras); listado -> tabla; si pide un mapa o ver Chile por región -> grafico_mapa con "agrupar_por": "region". Si el usuario pide un tipo expresamente, respétalo.
 - "titulo" es un título breve en español para el reporte.
 - Usa "accion": "rechazar" cuando la pregunta pida modificar o borrar datos, pida campos no autorizados (en especial datos personales de clientes) o no tenga relación con el negocio.
 - Usa "accion": "aclarar" cuando la pregunta sea tan vaga que no se pueda saber qué medir (por ejemplo un saludo). En "motivo_rechazo" pregunta qué quiere medir, con qué filtros y cómo quiere verlo (barras, líneas, torta, KPI o tabla).
@@ -101,11 +101,16 @@ Cómo armar el plan:
 - En "rechazar" y "aclarar" escribe "motivo_rechazo" en español, dirigido al usuario, y completa el resto de campos con cualquier valor válido. Si la acción es "consultar", deja "motivo_rechazo" vacío."""
 
 
-def _mensaje_usuario(pregunta: str, filtros_panel: str) -> str:
-    if not filtros_panel:
-        return pregunta
-    return (f"{pregunta}\n\n(Filtros ya seleccionados en el panel del dashboard, que se aplican "
-            f"automáticamente: {filtros_panel}. No pidas aclaración por ellos.)")
+def _mensaje_usuario(pregunta: str, filtros_panel: str, area: str = "") -> str:
+    mensaje = pregunta
+    if area:
+        mensaje += (f"\n\n(Área en pantalla: {area}. Si la pregunta no indica claramente otra área, usa esta y elige "
+                    "su métrica más cercana, sin pedir aclaración por eso. Por ejemplo, un \"monto\" en FIN es la prima "
+                    "y en CUO es el monto de cuotas.)")
+    if filtros_panel:
+        mensaje += (f"\n\n(Filtros ya seleccionados en el panel del dashboard, que se aplican "
+                    f"automáticamente: {filtros_panel}. No pidas aclaración por ellos.)")
+    return mensaje
 
 
 _cliente: anthropic.Anthropic | None = None
@@ -119,18 +124,20 @@ def _cliente_anthropic() -> anthropic.Anthropic:
 
 
 def interpretar_con_ia(pregunta: str, cat: catalogo.Catalogo, dominios_usuario: set[str],
-                      filtros_panel: str = "") -> tuple[PlanConsulta, dict]:
+                      filtros_panel: str = "", area: str = "") -> tuple[PlanConsulta, dict]:
     """Devuelve el plan y los tokens usados (para medir el costo real).
     `filtros_panel` describe los filtros ya elegidos en el dashboard: se informan
     a la IA como contexto, pero el backend los aplica igual por su cuenta."""
     if not os.getenv("ANTHROPIC_API_KEY"):
         raise ErrorIA("Falta ANTHROPIC_API_KEY en backend/.env.")
+    # Viene del navegador: solo pasa a la IA si es un área real que el usuario puede consultar
+    area_valida = f"{area} ({cat.dominios[area]})" if area in cat.dominios and area in dominios_usuario else ""
     try:
         respuesta = _cliente_anthropic().messages.create(
             model=MODELO,
             max_tokens=4000,  # el plan ocupa ~150 tokens; el resto es margen para el razonamiento
             system=_system_prompt(cat, dominios_usuario),
-            messages=[{"role": "user", "content": _mensaje_usuario(pregunta, filtros_panel)}],
+            messages=[{"role": "user", "content": _mensaje_usuario(pregunta, filtros_panel, area_valida)}],
             output_config={
                 "effort": "low",  # tarea simple: menos razonamiento = más rápido y barato
                 "format": {"type": "json_schema", "schema": _schema_plan(cat, dominios_usuario)},

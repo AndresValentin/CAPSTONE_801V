@@ -21,6 +21,7 @@ DRIVER = os.getenv("DB_DRIVER", "ODBC Driver 18 for SQL Server")
 USUARIO = os.getenv("DB_USER", "")  # vacío = autenticación de Windows
 CLAVE = os.getenv("DB_PASSWORD", "")
 LECTOR = os.getenv("DB_USUARIO_LECTOR", "bi_lector")  # vacío = no impersonar
+TIEMPO_CONEXION = int(os.getenv("DB_TIMEOUT", "5"))  # en Azure SQL, más alto: la base puede estar pausada
 
 if LECTOR and not re.fullmatch(r"\w+", LECTOR):
     raise ValueError("DB_USUARIO_LECTOR solo puede tener letras, números y _")
@@ -29,7 +30,7 @@ if LECTOR and not re.fullmatch(r"\w+", LECTOR):
 def _conectar() -> pyodbc.Connection:
     partes = [f"DRIVER={{{DRIVER}}}", f"SERVER={SERVIDOR}", f"DATABASE={BASE}", "TrustServerCertificate=yes"]
     partes += [f"UID={USUARIO}", f"PWD={CLAVE}"] if USUARIO else ["Trusted_Connection=yes"]
-    return pyodbc.connect(";".join(partes), timeout=5)
+    return pyodbc.connect(";".join(partes), timeout=TIEMPO_CONEXION)
 
 
 def _consultar(sql: str, params: tuple = ()) -> list[tuple]:
@@ -75,6 +76,204 @@ def dominios_autorizados(cod_usuario: str) -> set[str] | None:
         (cod_usuario,),
     )
     return {fila[0] for fila in filas}
+
+
+# --- Perfil y administración de usuarios --------------------------------------
+
+def perfil(cod_usuario: str) -> dict | None:
+    fila = _consultar(
+        """SELECT COD_USUARIO, DESC_NOMBRE, DESC_CORREO, FLG_SUPERADMIN FROM seguridad.SEG_USUARIO
+           WHERE COD_USUARIO = ? AND FLG_ACTIVO = 1""",
+        (cod_usuario,),
+    )
+    if not fila:
+        return None
+    return {"usuario": fila[0][0], "nombre": fila[0][1], "correo": fila[0][2], "superadmin": bool(fila[0][3])}
+
+
+def listar_usuarios() -> list[dict]:
+    usuarios = {
+        f[0]: {"usuario": f[0], "nombre": f[1], "correo": f[2] or "", "activo": bool(f[3]), "superadmin": bool(f[4]), "dominios": []}
+        for f in _consultar(
+            """SELECT COD_USUARIO, DESC_NOMBRE, DESC_CORREO, FLG_ACTIVO, FLG_SUPERADMIN
+               FROM seguridad.SEG_USUARIO ORDER BY COD_USUARIO"""
+        )
+    }
+    for cod_usuario, cod_dominio in _consultar(
+        """SELECT U.COD_USUARIO, D.COD_DOMINIO
+           FROM seguridad.SEG_USUARIO_DOMINIO UD
+           JOIN seguridad.SEG_USUARIO U ON U.ID_USUARIO = UD.ID_USUARIO
+           JOIN seguridad.SEG_DOMINIO D ON D.ID_DOMINIO = UD.ID_DOMINIO
+           WHERE UD.FLG_PUEDE_CONSULTAR = 1"""
+    ):
+        usuarios[cod_usuario]["dominios"].append(cod_dominio)
+    return list(usuarios.values())
+
+
+def guardar_usuario(cod_usuario: str, nombre: str, correo: str | None, activo: bool, superadmin: bool,
+                    dominios: list[str], crear: bool) -> bool:
+    """Crea o actualiza el usuario y sus áreas en una transacción.
+    False si al crear ya existe, o si al actualizar no existe. Un usuario nuevo no tiene
+    clave: la define con el enlace de recuperación."""
+    with closing(_conectar()) as con:
+        cursor = con.cursor()
+        if crear:
+            if cursor.execute("SELECT 1 FROM seguridad.SEG_USUARIO WHERE COD_USUARIO = ?", (cod_usuario,)).fetchone():
+                return False
+            fila = cursor.execute(
+                """INSERT INTO seguridad.SEG_USUARIO (COD_USUARIO, DESC_NOMBRE, DESC_CORREO, FLG_ACTIVO, FLG_SUPERADMIN)
+                   OUTPUT inserted.ID_USUARIO VALUES (?, ?, ?, ?, ?)""",
+                (cod_usuario, nombre, correo, activo, superadmin),
+            ).fetchone()
+        else:
+            fila = cursor.execute(
+                """UPDATE seguridad.SEG_USUARIO
+                   SET DESC_NOMBRE = ?, DESC_CORREO = ?, FLG_ACTIVO = ?, FLG_SUPERADMIN = ?
+                   OUTPUT inserted.ID_USUARIO WHERE COD_USUARIO = ?""",
+                (nombre, correo, activo, superadmin, cod_usuario),
+            ).fetchone()
+            if fila is None:
+                return False
+        id_usuario = fila[0]
+        cursor.execute("DELETE FROM seguridad.SEG_USUARIO_DOMINIO WHERE ID_USUARIO = ?", (id_usuario,))
+        for dominio in dominios:
+            cursor.execute(
+                """INSERT INTO seguridad.SEG_USUARIO_DOMINIO (ID_USUARIO, ID_DOMINIO, FLG_PUEDE_CONSULTAR)
+                   SELECT ?, ID_DOMINIO, 1 FROM seguridad.SEG_DOMINIO WHERE COD_DOMINIO = ?""",
+                (id_usuario, dominio),
+            )
+        con.commit()
+    return True
+
+
+# --- Solicitudes de acceso -----------------------------------------------------
+
+def crear_solicitud(nombre: str, correo: str, areas: list[str], motivo: str, ip_hash: str,
+                    max_correo: int, max_ip: int, max_total: int) -> bool:
+    """Registra la solicitud si no supera los límites de las últimas 24 horas.
+    False también si ya tiene una pendiente o si el correo ya pertenece a una cuenta."""
+    with closing(_conectar()) as con:
+        cursor = con.cursor()
+        total, por_correo, por_ip = cursor.execute(
+            """SELECT COUNT(*),
+                      COALESCE(SUM(CASE WHEN DESC_CORREO = ? THEN 1 ELSE 0 END), 0),
+                      COALESCE(SUM(CASE WHEN DESC_IP_HASH = ? THEN 1 ELSE 0 END), 0)
+               FROM seguridad.SEG_SOLICITUD_ACCESO WITH (UPDLOCK, HOLDLOCK)
+               WHERE DT_CREADO > DATEADD(DAY, -1, SYSUTCDATETIME())""",
+            (correo, ip_hash),
+        ).fetchone()
+        if total >= max_total or por_correo >= max_correo or por_ip >= max_ip:
+            return False
+        repetida = cursor.execute(
+            """SELECT 1 WHERE EXISTS (SELECT 1 FROM seguridad.SEG_SOLICITUD_ACCESO
+                                      WHERE DESC_CORREO = ? AND COD_ESTADO = 'PENDIENTE')
+                          OR EXISTS (SELECT 1 FROM seguridad.SEG_USUARIO WHERE DESC_CORREO = ?)""",
+            (correo, correo),
+        ).fetchone()
+        if repetida:
+            return False
+        cursor.execute(
+            """INSERT INTO seguridad.SEG_SOLICITUD_ACCESO (DESC_NOMBRE, DESC_CORREO, DESC_AREAS, DESC_MOTIVO, DESC_IP_HASH)
+               VALUES (?, ?, ?, ?, ?)""",
+            (nombre, correo, ",".join(areas), motivo, ip_hash),
+        )
+        con.commit()
+    return True
+
+
+def contar_solicitudes_pendientes() -> int:
+    return _consultar("SELECT COUNT(*) FROM seguridad.SEG_SOLICITUD_ACCESO WHERE COD_ESTADO = 'PENDIENTE'")[0][0]
+
+
+def listar_solicitudes() -> list[dict]:
+    filas = _consultar(
+        """SELECT ID_SOLICITUD, DESC_NOMBRE, DESC_CORREO, DESC_AREAS, DESC_MOTIVO, CONVERT(CHAR(10), DT_CREADO, 120)
+           FROM seguridad.SEG_SOLICITUD_ACCESO WHERE COD_ESTADO = 'PENDIENTE' ORDER BY DT_CREADO"""
+    )
+    return [
+        {"id": f[0], "nombre": f[1], "correo": f[2], "areas": [a for a in f[3].split(",") if a], "motivo": f[4], "fecha": f[5]}
+        for f in filas
+    ]
+
+
+def resolver_solicitud(id_solicitud: int, estado: str, resuelto_por: str | None) -> bool:
+    """Cambia de estado una solicitud. False si ya no está en el estado esperado."""
+    origen = "APROBADA" if estado == "PENDIENTE" else "PENDIENTE"
+    with closing(_conectar()) as con:
+        cursor = con.cursor()
+        cursor.execute(
+            """UPDATE seguridad.SEG_SOLICITUD_ACCESO
+               SET COD_ESTADO = ?, DT_RESUELTO = CASE WHEN ? = 'PENDIENTE' THEN NULL ELSE SYSUTCDATETIME() END,
+                   COD_RESUELTO_POR = ?
+               WHERE ID_SOLICITUD = ? AND COD_ESTADO = ?""",
+            (estado, estado, resuelto_por, id_solicitud, origen),
+        )
+        cambiada = cursor.rowcount == 1
+        con.commit()
+    return cambiada
+
+
+# --- Recuperación de contraseña -----------------------------------------------
+
+def usuario_para_recuperar(cod_usuario: str) -> dict | None:
+    """Usuario activo con correo registrado."""
+    fila = _consultar(
+        """SELECT ID_USUARIO, COD_USUARIO, DESC_NOMBRE, DESC_CORREO FROM seguridad.SEG_USUARIO
+           WHERE FLG_ACTIVO = 1 AND DESC_CORREO IS NOT NULL AND COD_USUARIO = ?""",
+        (cod_usuario,),
+    )
+    if not fila:
+        return None
+    return {"id": fila[0][0], "usuario": fila[0][1], "nombre": fila[0][2], "correo": fila[0][3]}
+
+
+def crear_recuperacion(id_usuario: int, token_hash: str, minutos: int, maximo_por_hora: int) -> bool:
+    """Registra un enlace nuevo y anula los anteriores. False si superó el límite por hora."""
+    with closing(_conectar()) as con:
+        cursor = con.cursor()
+        recientes = cursor.execute(
+            """SELECT COUNT(*) FROM seguridad.SEG_RECUPERACION_CLAVE WITH (UPDLOCK, HOLDLOCK)
+               WHERE ID_USUARIO = ? AND DT_CREADO > DATEADD(HOUR, -1, SYSUTCDATETIME())""",
+            (id_usuario,),
+        ).fetchone()[0]
+        if recientes >= maximo_por_hora:
+            return False
+        cursor.execute(
+            """UPDATE seguridad.SEG_RECUPERACION_CLAVE SET DT_USADO = SYSUTCDATETIME()
+               WHERE ID_USUARIO = ? AND DT_USADO IS NULL""",
+            (id_usuario,),
+        )
+        cursor.execute(
+            """INSERT INTO seguridad.SEG_RECUPERACION_CLAVE (ID_USUARIO, DESC_TOKEN_HASH, DT_VENCE)
+               VALUES (?, ?, DATEADD(MINUTE, ?, SYSUTCDATETIME()))""",
+            (id_usuario, token_hash, minutos),
+        )
+        con.commit()
+    return True
+
+
+def aplicar_recuperacion(token_hash: str, clave_hash: str) -> bool:
+    """Consume el enlace y cambia la clave en una sola transacción. El UPDATE con las
+    condiciones de vigencia impide que dos solicitudes usen el mismo enlace."""
+    with closing(_conectar()) as con:
+        cursor = con.cursor()
+        fila = cursor.execute(
+            """UPDATE seguridad.SEG_RECUPERACION_CLAVE SET DT_USADO = SYSUTCDATETIME()
+               OUTPUT inserted.ID_USUARIO
+               WHERE DESC_TOKEN_HASH = ? AND DT_USADO IS NULL AND DT_VENCE > SYSUTCDATETIME()""",
+            (token_hash,),
+        ).fetchone()
+        if fila is None:
+            return False
+        cursor.execute(
+            "UPDATE seguridad.SEG_USUARIO SET DESC_CLAVE_HASH = ? WHERE ID_USUARIO = ? AND FLG_ACTIVO = 1",
+            (clave_hash, fila[0]),
+        )
+        if cursor.rowcount != 1:
+            con.rollback()
+            return False
+        con.commit()
+    return True
 
 
 # --- Metadatos ---------------------------------------------------------------

@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reporte BI Copilot</title>
+<style>
+  :root {
+    color-scheme: light;
+    --fondo: #f4f6fb; --superficie: #fff; --borde: #e4e7f0; --texto: #1a2138; --tenue: #667085;
+    --primario: #1e2a5e; --primario-suave: #e8ebf7; --rejilla: #eef0f5; --linea: #0d9488;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; background: var(--fondo); color: var(--texto); font: 14px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  h1 { margin: 0; font-size: 22px; color: var(--primario); }
+  .sub { margin: 2px 0 16px; font-size: 12.5px; color: var(--tenue); }
+  .filtros { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 14px 16px; margin-bottom: 16px; background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; }
+  .filtros label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--tenue); }
+  select { min-width: 150px; padding: 7px 9px; font: inherit; font-size: 13px; color: var(--texto); background: #fff; border: 1px solid var(--borde); border-radius: 8px; }
+  button.limpiar { padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 600; color: var(--primario); background: var(--primario-suave); border: 0; border-radius: 8px; cursor: pointer; }
+  button.limpiar:disabled { opacity: .5; cursor: default; }
+  .grilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 14px; }
+  .tarjeta { min-width: 0; padding: 14px 16px; background: var(--superficie); border: 1px solid var(--borde); border-radius: 12px; }
+  .cabecera { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+  .cabecera > div { min-width: 0; }
+  h2 { margin: 0; font-size: 14px; }
+  .cabecera p { margin: 2px 0 0; font-size: 11.5px; color: var(--tenue); }
+  .alternar { flex-shrink: 0; padding: 4px 9px; font: inherit; font-size: 11.5px; font-weight: 600; color: var(--tenue); background: transparent; border: 1px solid var(--borde); border-radius: 7px; cursor: pointer; }
+  .alternar:hover { color: var(--primario); border-color: var(--primario); }
+  .vacio { padding: 56px 0; text-align: center; color: var(--tenue); font-size: 13px; }
+  .kpi { padding: 44px 0; text-align: center; font-size: 40px; font-weight: 700; color: var(--primario); font-variant-numeric: tabular-nums; }
+  svg { display: block; max-width: 100%; }
+  svg text { fill: var(--tenue); font-size: 11px; }
+  .barras { display: grid; gap: 7px; padding: 4px 0; max-height: 300px; overflow-y: auto; }
+  .fila { display: grid; grid-template-columns: minmax(70px, 130px) minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 3px 4px; border: 0; background: none; font: inherit; color: inherit; text-align: left; border-radius: 6px; }
+  .fila.clic { cursor: pointer; }
+  .fila:hover { background: var(--fondo); }
+  .fila .nombre { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fila .pista { height: 14px; }
+  .fila .barra { display: block; height: 100%; min-width: 2px; background: var(--primario); border-radius: 0 4px 4px 0; }
+  .fila .valor { font-size: 12px; color: var(--tenue); font-variant-numeric: tabular-nums; }
+  .dona { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 18px; padding: 8px 0; }
+  .dona path.clic { cursor: pointer; }
+  .leyenda { display: grid; gap: 6px; font-size: 12.5px; }
+  .leyenda span { display: inline-flex; align-items: center; gap: 7px; }
+  .leyenda i { width: 10px; height: 10px; border-radius: 50%; }
+  .leyenda b { font-weight: 500; color: var(--tenue); font-variant-numeric: tabular-nums; }
+  .tabla { max-height: 300px; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { position: sticky; top: 0; padding: 6px 8px; text-align: left; color: var(--tenue); background: var(--superficie); border-bottom: 1px solid var(--borde); }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--rejilla); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .mapa { display: flex; justify-content: center; }
+  .mapa path { stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .mapa path.clic { cursor: pointer; }
+  .mapa path:hover { stroke: var(--primario); stroke-width: 1.5; }
+  .mapa svg text.nombre { font-size: 12.5px; font-weight: 600; fill: var(--texto); }
+  .mapa svg text.valor { font-size: 12.5px; }
+  .tip { position: fixed; z-index: 10; max-width: 260px; padding: 7px 10px; font-size: 12.5px; color: #fff; background: #1a2138; border-radius: 7px; pointer-events: none; }
+  .tip b { display: block; font-weight: 600; }
+  .pie { margin-top: 18px; font-size: 11.5px; color: var(--tenue); text-align: center; }
+  @media (max-width: 640px) { body { padding: 16px; } select { min-width: 130px; } }
+</style>
+</head>
+<body>
+  <h1 id="titulo"></h1>
+  <p class="sub" id="subtitulo"></p>
+  <section class="filtros" aria-label="Filtros" id="filtros"></section>
+  <main class="grilla" id="grilla"></main>
+  <p class="pie">Datos del momento de la exportación. Haz clic en una región, producto o mes para filtrar todo el reporte.</p>
+  <div class="tip" id="tip" role="status" hidden></div>
+
+<script type="application/json" id="datos">__DATOS__</script>
+<script>
+(function () {
+  'use strict'
+  var D = JSON.parse(document.getElementById('datos').textContent)
+  var COLORES = ['#2563eb', '#0d9488', '#d97706', '#7c3aed', '#db2777']
+  var COLOR_OTROS = '#94a3b8'
+  var SVG = 'http://www.w3.org/2000/svg'
+  var S = { region: '', producto: '', desde: '', hasta: '' }
+  var CLP = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 })
+  var NUM = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 })
+
+  function fmt(v, moneda) { return moneda ? CLP.format(v) : NUM.format(v) }
+  function corto(v, moneda) {
+    var p = moneda ? '$' : ''
+    var a = Math.abs(v)
+    if (a >= 1e9) return p + (v / 1e9).toLocaleString('es-CL', { maximumFractionDigits: 1 }) + ' mM'
+    if (a >= 1e6) return p + (v / 1e6).toLocaleString('es-CL', { maximumFractionDigits: 1 }) + ' M'
+    if (a >= 1e4) return p + Math.round(v / 1e3).toLocaleString('es-CL') + ' mil'
+    return fmt(v, moneda)
+  }
+
+  // Todo el texto entra con textContent: los títulos vienen de lo escrito en el chat
+  function el(tag, props, hijos) {
+    var n = document.createElement(tag)
+    Object.keys(props || {}).forEach(function (k) {
+      if (k === 'texto') n.textContent = props[k]
+      else if (k === 'clase') n.className = props[k]
+      else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2), props[k])
+      else n.setAttribute(k, props[k])
+    })
+    ;(hijos || []).forEach(function (h) { n.appendChild(h) })
+    return n
+  }
+  function sv(tag, attrs, texto) {
+    var n = document.createElementNS(SVG, tag)
+    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]) })
+    if (texto !== undefined) n.textContent = texto
+    return n
+  }
+
+  // --- Datos -----------------------------------------------------------------
+  function pasa(f) {
+    if (S.region && D.regiones[f[1]] !== S.region) return false
+    if (S.producto && D.productos[f[2]] !== S.producto) return false
+    var mes = D.meses[f[3]]
+    if (S.desde && mes < S.desde) return false
+    if (S.hasta && mes > S.hasta) return false
+    return true
+  }
+
+  function nuevo() { return { v: 0, n: 0, ids: new Set() } }
+  function sumar(a, f, modo) {
+    if (modo === 'distinto') a.ids.add(f[4])
+    else { a.v += f[4]; a.n += f[5] }
+  }
+  function valor(a, modo) {
+    if (modo === 'distinto') return a.ids.size
+    if (modo === 'promedio') return a.n ? a.v / a.n : 0
+    return a.v
+  }
+
+  function agregar(g, todas) {
+    var cubos = new Map()
+    var total = nuevo()
+    g.filas.forEach(function (f) {
+      if (!todas && !pasa(f)) return
+      if (!cubos.has(f[0])) cubos.set(f[0], nuevo())
+      sumar(cubos.get(f[0]), f, g.modo)
+      sumar(total, f, g.modo)
+    })
+    var serie = []
+    cubos.forEach(function (a, c) { serie.push({ categoria: g.categorias[c], valor: valor(a, g.modo) }) })
+    if (g.agruparPor === 'mes') serie.sort(function (a, b) { return a.categoria < b.categoria ? -1 : 1 })
+    else serie.sort(function (a, b) { return b.valor - a.valor })
+    return { serie: serie, total: valor(total, g.modo) }
+  }
+
+  // El color sigue a la categoría: se fija una vez con todos los datos y un filtro no lo cambia
+  D.graficos.forEach(function (g) {
+    var base = agregar(g, true).serie
+    var limite = base.length > COLORES.length ? COLORES.length - 1 : COLORES.length
+    g.color = new Map()
+    base.slice(0, limite).forEach(function (f, i) { g.color.set(f.categoria, COLORES[i]) })
+  })
+
+  function porciones(g, serie) {
+    var salida = []
+    var otros = 0
+    var cuantos = 0
+    serie.forEach(function (f) {
+      if (f.valor <= 0) return
+      if (g.color.has(f.categoria)) salida.push({ categoria: f.categoria, valor: f.valor, color: g.color.get(f.categoria) })
+      else { otros += f.valor; cuantos += 1 }
+    })
+    if (otros > 0) salida.push({ categoria: 'Otros (' + cuantos + ')', valor: otros, color: COLOR_OTROS })
+    return salida
+  }
+
+  // --- Interacción -----------------------------------------------------------
+  var tip = document.getElementById('tip')
+  function mostrar(e, titulo, detalle) {
+    tip.textContent = ''
+    tip.appendChild(el('b', { texto: titulo }))
+    tip.appendChild(document.createTextNode(detalle))
+    tip.hidden = false
+    var x = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8)
+    var y = Math.min(e.clientY + 14, window.innerHeight - tip.offsetHeight - 8)
+    tip.style.left = Math.max(8, x) + 'px'
+    tip.style.top = Math.max(8, y) + 'px'
+  }
+  function ocultar() { tip.hidden = true }
+
+  function esFiltrable(g) { return g.agruparPor === 'region' || g.agruparPor === 'producto' || g.agruparPor === 'mes' }
+  function filtrarPor(g, categoria) {
+    ocultar()
+    if (g.agruparPor === 'mes') {
+      var igual = S.desde === categoria && S.hasta === categoria
+      S.desde = igual ? '' : categoria
+      S.hasta = igual ? '' : categoria
+    } else {
+      S[g.agruparPor] = S[g.agruparPor] === categoria ? '' : categoria
+    }
+    actualizar()
+  }
+
+  // --- Formas ----------------------------------------------------------------
+  function escala(min, max) {
+    var rango = (max - min) || 1
+    var bruto = rango / 4
+    var pot = Math.pow(10, Math.floor(Math.log10(bruto)))
+    var r = bruto / pot
+    var paso = (r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10) * pot
+    var ini = Math.floor(min / paso) * paso
+    var fin = Math.ceil(max / paso) * paso
+    var marcas = []
+    for (var v = ini; v <= fin + paso / 2; v += paso) marcas.push(v)
+    return { ini: ini, fin: fin, marcas: marcas }
+  }
+
+  function dibujarLinea(cont, g, serie) {
+    var W = Math.max(cont.clientWidth, 280)
+    var H = 240
+    var m = { i: 62, d: 14, a: 10, b: 26 }
+    var vals = serie.map(function (f) { return f.valor })
+    var e = escala(Math.min(0, Math.min.apply(null, vals)), Math.max.apply(null, vals, [0]))
+    var ancho = W - m.i - m.d
+    var alto = H - m.a - m.b
+    function X(i) { return m.i + (serie.length > 1 ? i * ancho / (serie.length - 1) : ancho / 2) }
+    function Y(v) { return m.a + alto - (v - e.ini) / ((e.fin - e.ini) || 1) * alto }
+    var s = sv('svg', { width: W, height: H, viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': g.titulo })
+    e.marcas.forEach(function (v) {
+      s.appendChild(sv('line', { x1: m.i, x2: W - m.d, y1: Y(v), y2: Y(v), stroke: 'var(--rejilla)' }))
+      s.appendChild(sv('text', { x: m.i - 8, y: Y(v) + 4, 'text-anchor': 'end' }, corto(v, g.moneda)))
+    })
+    var cada = Math.max(1, Math.ceil(serie.length / Math.max(2, Math.floor(ancho / 74))))
+    serie.forEach(function (f, i) {
+      if (i % cada === 0) s.appendChild(sv('text', { x: X(i), y: H - 7, 'text-anchor': 'middle' }, f.categoria))
+    })
+    s.appendChild(sv('path', {
+      d: serie.map(function (f, i) { return (i ? 'L' : 'M') + X(i) + ' ' + Y(f.valor) }).join(' '),
+      fill: 'none', stroke: 'var(--linea)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+    }))
+    if (serie.length < 2) s.appendChild(sv('circle', { cx: X(0), cy: Y(vals[0]), r: 4, fill: 'var(--linea)' }))
+    var guia = sv('line', { y1: m.a, y2: H - m.b, stroke: 'var(--tenue)', 'stroke-dasharray': '3 3', visibility: 'hidden' })
+    var punto = sv('circle', { r: 5, fill: 'var(--linea)', stroke: '#fff', 'stroke-width': 2, visibility: 'hidden' })
+    var capa = sv('rect', { x: m.i, y: m.a, width: ancho, height: alto, fill: 'transparent', style: esFiltrable(g) ? 'cursor:pointer' : '' })
+    s.appendChild(guia); s.appendChild(punto); s.appendChild(capa)
+    function indice(ev) {
+      var r = s.getBoundingClientRect()
+      var x = (ev.clientX - r.left) * W / r.width
+      return Math.max(0, Math.min(serie.length - 1, Math.round((x - m.i) / (ancho / Math.max(1, serie.length - 1)))))
+    }
+    capa.addEventListener('pointermove', function (ev) {
+      var i = indice(ev)
+      guia.setAttribute('x1', X(i)); guia.setAttribute('x2', X(i)); guia.setAttribute('visibility', 'visible')
+      punto.setAttribute('cx', X(i)); punto.setAttribute('cy', Y(serie[i].valor)); punto.setAttribute('visibility', 'visible')
+      mostrar(ev, serie[i].categoria, fmt(serie[i].valor, g.moneda))
+    })
+    capa.addEventListener('pointerleave', function () {
+      guia.setAttribute('visibility', 'hidden'); punto.setAttribute('visibility', 'hidden'); ocultar()
+    })
+    if (esFiltrable(g)) capa.addEventListener('click', function (ev) { filtrarPor(g, serie[indice(ev)].categoria) })
+    cont.appendChild(s)
+  }
+
+  function dibujarBarras(cont, g, serie) {
+    var max = Math.max.apply(null, serie.map(function (f) { return Math.abs(f.valor) }).concat([1]))
+    var clic = esFiltrable(g)
+    var lista = el('div', { clase: 'barras' })
+    serie.forEach(function (f) {
+      var barra = el('span', { clase: 'barra' })
+      barra.style.width = (Math.abs(f.valor) / max * 100) + '%'
+      lista.appendChild(el(clic ? 'button' : 'div', Object.assign({
+        clase: 'fila' + (clic ? ' clic' : ''),
+        onpointermove: function (e) { mostrar(e, f.categoria, fmt(f.valor, g.moneda)) },
+        onpointerleave: ocultar,
+      }, clic ? { type: 'button', onclick: function () { filtrarPor(g, f.categoria) } } : {}), [
+        el('span', { clase: 'nombre', texto: f.categoria, title: f.categoria }),
+        el('span', { clase: 'pista' }, [barra]),
+        el('span', { clase: 'valor', texto: corto(f.valor, g.moneda) }),
+      ]))
+    })
+    cont.appendChild(lista)
+  }
+
+  function arco(cx, cy, re, ri, a0, a1) {
+    var p = function (r, a) { return (cx + r * Math.cos(a)) + ' ' + (cy + r * Math.sin(a)) }
+    var grande = a1 - a0 > Math.PI ? 1 : 0
+    return 'M' + p(re, a0) + ' A' + re + ' ' + re + ' 0 ' + grande + ' 1 ' + p(re, a1)
+      + ' L' + p(ri, a1) + ' A' + ri + ' ' + ri + ' 0 ' + grande + ' 0 ' + p(ri, a0) + ' Z'
+  }
+
+  function dibujarDona(cont, g, serie, total) {
+    var partes = porciones(g, serie)
+    var suma = partes.reduce(function (a, f) { return a + f.valor }, 0)
+    if (!suma) { cont.appendChild(el('p', { clase: 'vacio', texto: 'Sin datos con estos filtros.' })); return }
+    var s = sv('svg', { width: 190, height: 190, viewBox: '0 0 190 190', role: 'img', 'aria-label': g.titulo })
+    var a = -Math.PI / 2
+    var leyenda = el('div', { clase: 'leyenda' })
+    partes.forEach(function (f) {
+      var delta = Math.min(f.valor / suma * Math.PI * 2, Math.PI * 2 - 0.001)
+      var pct = (f.valor / suma * 100).toFixed(1).replace('.', ',') + '%'
+      var filtra = esFiltrable(g) && g.color.has(f.categoria)
+      var p = sv('path', { d: arco(95, 95, 88, 56, a, a + delta), fill: f.color, stroke: '#fff', 'stroke-width': 2 })
+      if (filtra) { p.setAttribute('class', 'clic'); p.addEventListener('click', function () { filtrarPor(g, f.categoria) }) }
+      p.addEventListener('pointermove', function (e) { mostrar(e, f.categoria, fmt(f.valor, g.moneda) + ' · ' + pct) })
+      p.addEventListener('pointerleave', ocultar)
+      s.appendChild(p)
+      var punto = el('i')
+      punto.style.background = f.color
+      leyenda.appendChild(el('span', {}, [punto, document.createTextNode(f.categoria + ' '), el('b', { texto: pct })]))
+      a += delta
+    })
+    s.appendChild(sv('text', { x: 95, y: 100, 'text-anchor': 'middle', style: 'font-size:15px;font-weight:600;fill:var(--texto)' }, corto(total, g.moneda)))
+    cont.appendChild(el('div', { clase: 'dona' }, [s, leyenda]))
+  }
+
+  function colorMapa(v, min, max) {
+    var bajo = [191, 212, 247]
+    var alto = [30, 58, 138]
+    var t = max > min ? (v - min) / (max - min) : 1
+    return 'rgb(' + bajo.map(function (c, i) { return Math.round(c + (alto[i] - c) * t) }).join(',') + ')'
+  }
+
+  function dibujarMapa(cont, g, serie) {
+    var H = 560
+    var M = D.mapa
+    var k = (H - 16) / M.alto
+    var xEt = Math.round(M.ancho * k + 56)
+    var W = xEt + 180
+    var por = new Map(serie.map(function (f) { return [f.categoria, f.valor] }))
+    var vals = serie.map(function (f) { return f.valor })
+    var min = Math.min.apply(null, vals)
+    var max = Math.max.apply(null, vals)
+    var s = sv('svg', { width: W, height: H, viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': g.titulo, style: 'height:auto' })
+    var capa = sv('g', { transform: 'translate(8 8) scale(' + k + ')' })
+    M.regiones.forEach(function (r) {
+      var tiene = por.has(r.nombre)
+      var p = sv('path', { d: r.d, fill: tiene ? colorMapa(por.get(r.nombre), min, max) : '#e8ebf1' })
+      p.addEventListener('pointermove', function (e) { mostrar(e, r.nombre, tiene ? fmt(por.get(r.nombre), g.moneda) : 'Sin datos') })
+      p.addEventListener('pointerleave', ocultar)
+      if (tiene) { p.setAttribute('class', 'clic'); p.addEventListener('click', function () { filtrarPor(g, r.nombre) }) }
+      capa.appendChild(p)
+    })
+    s.appendChild(capa)
+    var etiquetas = M.regiones.filter(function (r) { return por.has(r.nombre) }).map(function (r) {
+      return { nombre: r.nombre, valor: por.get(r.nombre), x: r.cx * k + 8, y: r.cy * k + 8 }
+    }).sort(function (a, b) { return a.y - b.y })
+    etiquetas.forEach(function (e, i) { e.ye = Math.max(e.y, i ? etiquetas[i - 1].ye + 46 : 24) })
+    for (var i = etiquetas.length - 1, tope = H - 70; i >= 0; i--, tope -= 46) etiquetas[i].ye = Math.min(etiquetas[i].ye, tope)
+    etiquetas.forEach(function (e) {
+      s.appendChild(sv('polyline', { points: e.x + ',' + e.y + ' ' + (xEt - 18) + ',' + e.ye + ' ' + (xEt - 6) + ',' + e.ye, fill: 'none', stroke: '#94a3b8' }))
+      s.appendChild(sv('circle', { cx: e.x, cy: e.y, r: 2.5, fill: 'var(--primario)', stroke: '#fff' }))
+      s.appendChild(sv('text', { 'class': 'nombre', x: xEt, y: e.ye - 3 }, e.nombre))
+      s.appendChild(sv('text', { 'class': 'valor', x: xEt, y: e.ye + 14 }, cortoMapa(e.valor, g.moneda)))
+    })
+    var id = 'grad' + D.graficos.indexOf(g)
+    var defs = sv('defs')
+    var grad = sv('linearGradient', { id: id })
+    grad.appendChild(sv('stop', { offset: '0%', 'stop-color': colorMapa(min, min, max) }))
+    grad.appendChild(sv('stop', { offset: '100%', 'stop-color': colorMapa(max, min, max) }))
+    defs.appendChild(grad)
+    s.appendChild(defs)
+    var ley = sv('g', { transform: 'translate(' + xEt + ' ' + (H - 42) + ')' })
+    ley.appendChild(sv('rect', { width: 120, height: 8, rx: 4, fill: 'url(#' + id + ')' }))
+    ley.appendChild(sv('text', { y: 22 }, cortoMapa(min, g.moneda)))
+    ley.appendChild(sv('text', { x: 120, y: 22, 'text-anchor': 'end' }, cortoMapa(max, g.moneda)))
+    ley.appendChild(sv('rect', { x: 132, width: 10, height: 8, rx: 2, fill: '#e8ebf1' }))
+    ley.appendChild(sv('text', { x: 132, y: 22 }, 'Sin datos'))
+    s.appendChild(ley)
+    cont.appendChild(el('div', { clase: 'mapa' }, [s]))
+  }
+
+  // En el mapa las regiones se parecen: en millones las diferencias se alcanzan a leer
+  function cortoMapa(v, moneda) {
+    if (!moneda || Math.abs(v) < 1e6) return corto(v, moneda)
+    return '$' + (v / 1e6).toLocaleString('es-CL', { maximumFractionDigits: 1 }) + ' M'
+  }
+
+  function dibujarTabla(cont, g, serie) {
+    var suma = serie.reduce(function (a, f) { return a + f.valor }, 0)
+    var cuerpo = el('tbody')
+    serie.forEach(function (f) {
+      cuerpo.appendChild(el('tr', {}, [
+        el('td', { texto: f.categoria }),
+        el('td', { clase: 'num', texto: fmt(f.valor, g.moneda) }),
+        el('td', { clase: 'num', texto: suma ? (f.valor / suma * 100).toFixed(1).replace('.', ',') + '%' : '—' }),
+      ]))
+    })
+    cont.appendChild(el('div', { clase: 'tabla' }, [el('table', {}, [
+      el('thead', {}, [el('tr', {}, [
+        el('th', { texto: g.etiquetaDimension }),
+        el('th', { clase: 'num', texto: g.etiquetaMetrica }),
+        el('th', { clase: 'num', texto: '% del total' }),
+      ])]),
+      cuerpo,
+    ])]))
+  }
+
+  // --- Página ----------------------------------------------------------------
+  function selector(etiqueta, clave, opciones, vacia) {
+    var s = el('select', { 'data-filtro': clave, onchange: function (e) { S[clave] = e.target.value; ocultar(); actualizar() } }, [el('option', { value: '', texto: vacia })])
+    opciones.forEach(function (o) { s.appendChild(el('option', { value: o, texto: o })) })
+    return el('label', { texto: etiqueta }, [s])
+  }
+
+  var limpiar
+  function iniciar() {
+    document.title = D.titulo
+    document.getElementById('titulo').textContent = D.titulo
+    document.getElementById('subtitulo').textContent = D.graficos.length + (D.graficos.length === 1 ? ' gráfico' : ' gráficos') + ' · Exportado el ' + D.exportado
+    var f = document.getElementById('filtros')
+    var usar = function (l) { return l.filter(function (v) { return v !== '—' }) }
+    var regiones = usar(D.regiones)
+    var productos = usar(D.productos)
+    var meses = usar(D.meses).sort()
+    if (regiones.length) f.appendChild(selector('Región', 'region', regiones, 'Todas'))
+    if (productos.length) f.appendChild(selector('Producto', 'producto', productos, 'Todos'))
+    if (meses.length) {
+      f.appendChild(selector('Desde', 'desde', meses, 'Inicio'))
+      f.appendChild(selector('Hasta', 'hasta', meses, 'Fin'))
+    }
+    limpiar = el('button', { clase: 'limpiar', type: 'button', texto: 'Limpiar filtros', onclick: function () {
+      S.region = S.producto = S.desde = S.hasta = ''
+      actualizar()
+    } })
+    f.appendChild(limpiar)
+
+    var grilla = document.getElementById('grilla')
+    D.graficos.forEach(function (g) {
+      g.vista = g.tipo
+      var boton = g.tipo === 'kpi' || g.tipo === 'tabla' ? null : el('button', {
+        clase: 'alternar', type: 'button', texto: 'Ver tabla',
+        onclick: function () {
+          g.vista = g.vista === 'tabla' ? g.tipo : 'tabla'
+          boton.textContent = g.vista === 'tabla' ? 'Ver gráfico' : 'Ver tabla'
+          pintar(g)
+        },
+      })
+      var fijos = g.filtrosFijos.length ? ' · ' + g.filtrosFijos.join(' · ') : ''
+      var sub = g.area + ' · ' + g.etiquetaMetrica + (g.agruparPor === 'ninguno' ? '' : ' por ' + g.etiquetaDimension.toLowerCase()) + fijos
+      g.cuerpo = el('div', { clase: 'cuerpo' })
+      var cabecera = el('div', { clase: 'cabecera' }, [el('div', {}, [el('h2', { texto: g.titulo }), el('p', { texto: sub })])])
+      if (boton) cabecera.appendChild(boton)
+      grilla.appendChild(el('article', { clase: 'tarjeta' }, [cabecera, g.cuerpo]))
+    })
+
+    var anchoPrevio = grilla.clientWidth
+    new ResizeObserver(function () {
+      if (grilla.clientWidth !== anchoPrevio) { anchoPrevio = grilla.clientWidth; D.graficos.forEach(pintar) }
+    }).observe(grilla)
+  }
+
+  function pintar(g) {
+    var c = g.cuerpo
+    var r = agregar(g, false)
+    c.textContent = ''
+    c.setAttribute('data-total', r.total)
+    if (r.serie.length === 0) { c.appendChild(el('p', { clase: 'vacio', texto: 'Sin datos con estos filtros.' })); return }
+    if (g.vista === 'kpi' || g.agruparPor === 'ninguno') c.appendChild(el('div', { clase: 'kpi', texto: fmt(r.total, g.moneda) }))
+    else if (g.vista === 'tabla') dibujarTabla(c, g, r.serie)
+    else if (g.vista === 'lineas') dibujarLinea(c, g, r.serie)
+    else if (g.vista === 'torta') dibujarDona(c, g, r.serie, r.total)
+    else if (g.vista === 'mapa') dibujarMapa(c, g, r.serie)
+    else dibujarBarras(c, g, r.serie)
+  }
+
+  function actualizar() {
+    document.querySelectorAll('[data-filtro]').forEach(function (s) { s.value = S[s.getAttribute('data-filtro')] })
+    limpiar.disabled = !(S.region || S.producto || S.desde || S.hasta)
+    D.graficos.forEach(pintar)
+  }
+
+  iniciar()
+  actualizar()
+})()
+</script>
+</body>
+</html>

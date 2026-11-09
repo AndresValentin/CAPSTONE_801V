@@ -1,0 +1,67 @@
+.mapa-chile {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.mapa-chile svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mapa-region {
+  stroke: var(--color-surface);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.mapa-region:hover {
+  stroke: var(--color-primary);
+  stroke-width: 1.5;
+}
+
+.mapa-guia {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 1;
+}
+
+.mapa-punto {
+  fill: var(--color-primary);
+  stroke: var(--color-surface);
+  stroke-width: 1;
+}
+
+.mapa-nombre {
+  font-size: 12.5px;
+  font-weight: 600;
+  fill: var(--color-text);
+}
+
+.mapa-valor {
+  font-size: 12.5px;
+  fill: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mapa-escala {
+  font-size: 11px;
+  fill: var(--color-text-muted);
+}
+
+.mapa-tip {
+  position: absolute;
+  z-index: 2;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  color: #fff;
+  background: #1a2138;
+  border-radius: 7px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.mapa-tip strong {
+  display: block;
+  font-weight: 600;
+}

@@ -1,3 +1,4 @@
+import { ESTILO_TOOLTIP } from '../lib/graficos.js'
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { formatCLP, formatCLPCorto } from '../lib/formato.js'
@@ -15,10 +16,10 @@ export default function MLPanel({ analisis }) {
     <div className="ml-panel">
       <ResponsiveContainer width="100%" height={100}>
         <ComposedChart data={analisis.chartData} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#eef0f5" vertical={false} />
-          <XAxis dataKey="fecha" tick={{ fontSize: 9 }} interval="preserveStartEnd" tickLine={false} />
-          <YAxis tick={{ fontSize: 9 }} tickFormatter={(v) => `${Math.round(v / 1e6)}M`} tickLine={false} axisLine={false} />
-          <Tooltip formatter={(v) => (v == null ? '—' : formatCLP(v))} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
+          <XAxis dataKey="fecha" tick={{ fontSize: 9, fill: 'var(--color-text-muted)' }} interval="preserveStartEnd" tickLine={false} />
+          <YAxis tick={{ fontSize: 9, fill: 'var(--color-text-muted)' }} tickFormatter={(v) => `${Math.round(v / 1e6)}M`} tickLine={false} axisLine={false} />
+          <Tooltip {...ESTILO_TOOLTIP} formatter={(v) => (v == null ? '—' : formatCLP(v))} />
           <Line type="monotone" dataKey="real" name="Real" stroke="var(--color-primary)" strokeWidth={2} dot={{ r: 2 }} />
           <Line type="monotone" dataKey="proyectado" name="Proyectado" stroke="var(--color-accent)" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2 }} />
         </ComposedChart>

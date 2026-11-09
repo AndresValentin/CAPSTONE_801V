@@ -6,6 +6,7 @@ import { proyectarMonto } from '../lib/regression.js'
 import { formatCLPCorto } from '../lib/formato.js'
 import ImportExcel from './ImportExcel.jsx'
 import MLPanel from './MLPanel.jsx'
+import PerfilMenu from './PerfilMenu.jsx'
 import './Sidebar.css'
 
 const DIA = 24 * 60 * 60 * 1000
@@ -48,7 +49,7 @@ function Modulo({ icono: Icono, titulo, resumen, abierto, onToggle, children }) 
 
 export default function Sidebar({
   abierto, conversaciones, activaId, onSeleccionarConversacion, onNuevoChat, onEliminarConversacion,
-  onImportar, totalImportados, onLimpiarImportados, datos,
+  onImportar, totalImportados, onLimpiarImportados, datos, sesion, onSalir,
 }) {
   const [busqueda, setBusqueda] = useState('')
   const [moduloAbierto, setModuloAbierto] = useState(null) // 'importar' | 'ml' | null
@@ -131,6 +132,8 @@ export default function Sidebar({
           <MLPanel analisis={analisis} />
         </Modulo>
       </div>
+
+      <PerfilMenu sesion={sesion} onSalir={onSalir} />
     </aside>
   )
 }
