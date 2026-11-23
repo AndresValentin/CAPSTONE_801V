@@ -268,57 +268,149 @@ class Recomendacion:
     motivo: str
 
 
-# Gráficos sugeridos en el chat, del más útil al menos útil. El tipo sigue lo que
-# hay que leer: líneas para tendencias, barras para comparar categorías (con muchas
-# se leen mejor que una torta) y torta solo para repartos de pocas partes.
+# Gráficos sugeridos en el chat: los que responden una pregunta del negocio, del más
+# útil al menos útil. El texto es lo que se envía a la IA, así que va en palabras simples;
+# el tipo sigue lo que hay que leer: líneas para tendencias (con el año anterior al lado,
+# para saber si se está mejor o peor), barras o mapa para comparar dónde se concentra y
+# torta solo para repartos de pocas partes.
 RECOMENDACIONES: dict[str, tuple[Recomendacion, ...]] = {
     "SIN": (
-        Recomendacion("Monto pagado por tipo de siniestro en barras", "monto_pagado", "tipo_siniestro", "Muestra qué tipo concentra el gasto"),
-        Recomendacion("Monto pagado por región en mapa de Chile", "monto_pagado", "region", "Muestra en el mapa dónde se concentra lo pagado"),
-        Recomendacion("Cantidad de siniestros por mes en líneas", "cantidad_siniestros", MES, "Muestra la tendencia y los meses con más casos"),
-        Recomendacion("Monto en reserva por región en barras", "monto_reserva", "region", "Compara dónde está el costo aún por pagar"),
-        Recomendacion("Monto pagado por producto en barras", "monto_pagado", "producto", "Compara el gasto entre líneas de negocio"),
-        Recomendacion("Monto recuperado por mes en líneas", "monto_recuperado", MES, "Muestra cómo evolucionan los recuperos"),
-        Recomendacion("Cantidad de siniestros por estado en torta", "cantidad_siniestros", "estado_siniestro", "Reparte los casos abiertos y cerrados"),
+        Recomendacion("Monto pagado por región en mapa", "monto_pagado", "region", "Dónde se concentra el gasto en siniestros"),
+        Recomendacion("Siniestros por mes comparado con el año anterior", "cantidad_siniestros", MES, "¿Llegan más o menos casos que hace un año?"),
+        Recomendacion("Monto pagado por tipo de siniestro", "monto_pagado", "tipo_siniestro", "Qué tipo de siniestro explica el gasto"),
+        Recomendacion("Reserva pendiente por producto", "monto_reserva", "producto", "Dónde está el costo que aún falta pagar"),
+        Recomendacion("Siniestros por producto", "cantidad_siniestros", "producto", "Qué línea de negocio genera más casos"),
+        Recomendacion("Monto recuperado por mes", "monto_recuperado", MES, "Cuánto vuelve por deducibles y terceros"),
     ),
     "FIN": (
-        Recomendacion("Prima directa neta por mes en líneas", "prima_total", MES, "Muestra la tendencia de ingresos, ya descontadas las anulaciones"),
-        Recomendacion("Prima directa neta por producto en barras", "prima_total", "producto", "Compara el aporte de cada línea de negocio"),
-        Recomendacion("Prima retenida neta por región en barras", "prima_retenida", "region", "Compara lo que queda en la compañía tras ceder riesgo"),
-        Recomendacion("Prima cedida neta por producto en barras", "prima_cedida", "producto", "Muestra qué productos ceden más riesgo"),
-        Recomendacion("Comisión total por producto en barras", "comision_total", "producto", "Compara el costo de intermediación"),
-        Recomendacion("Cantidad de movimientos por tipo en torta", "cantidad_movimientos", "tipo_movimiento", "Reparte emisiones y anulaciones"),
+        Recomendacion("Prima directa neta por mes comparada con el año anterior", "prima_total", MES, "¿Crecen los ingresos frente al año pasado?"),
+        Recomendacion("Prima directa neta por producto", "prima_total", "producto", "Qué productos aportan más ingresos"),
+        Recomendacion("Emisiones y anulaciones en torta", "cantidad_movimientos", "tipo_movimiento", "Qué parte de los movimientos son anulaciones"),
+        Recomendacion("Prima cedida por producto", "prima_cedida", "producto", "Cuánto riesgo se traspasa a reaseguradoras"),
+        Recomendacion("Comisiones por producto", "comision_total", "producto", "Cuánto cuesta vender cada producto"),
+        Recomendacion("Prima retenida neta por región", "prima_retenida", "region", "Lo que queda en la compañía en cada región"),
     ),
     "SEG": (
-        Recomendacion("Monto asegurado por producto en barras", "monto_asegurado", "producto", "Muestra dónde se concentra la exposición"),
-        Recomendacion("Cantidad de ítems por mes de emisión en líneas", "cantidad_items", MES, "Muestra la tendencia de ventas"),
-        Recomendacion("Cantidad de pólizas por región en barras", "cantidad_polizas", "region", "Compara la cartera por territorio"),
-        Recomendacion("Monto asegurado por región en barras", "monto_asegurado", "region", "Compara la exposición por territorio"),
-        Recomendacion("Cantidad de ítems por segmento en torta", "cantidad_items", "segmento", "Reparte la cartera entre pocos segmentos"),
+        Recomendacion("Pólizas emitidas por mes comparado con el año anterior", "cantidad_polizas", MES, "¿Se vende más o menos que hace un año?"),
+        Recomendacion("Pólizas emitidas por región en mapa", "cantidad_polizas", "region", "Dónde se vende más"),
+        Recomendacion("Monto asegurado por producto", "monto_asegurado", "producto", "Dónde se concentra la exposición"),
+        Recomendacion("Ítems asegurados por segmento en torta", "cantidad_items", "segmento", "A qué tipo de cliente se vende"),
     ),
     "CUO": (
-        Recomendacion("Monto de cuotas por estado en torta", "monto_cuotas", "estado_cuota", "Reparte lo pagado y lo pendiente"),
-        Recomendacion("Monto de cuotas pendientes por mes de vencimiento en líneas", "monto_cuotas_pendientes", MES, "Muestra cuándo se concentra lo que falta cobrar"),
-        Recomendacion("Monto de cuotas vencidas sin pagar por producto en barras", "monto_cuotas_vencidas", "producto", "Compara dónde está la morosidad"),
-        Recomendacion("Monto de cuotas vencidas sin pagar por región en barras", "monto_cuotas_vencidas", "region", "Compara la morosidad por territorio"),
-        Recomendacion("Monto de cuotas pagadas por mes de vencimiento en líneas", "monto_cuotas_pagadas", MES, "Muestra la tendencia de la cobranza"),
+        Recomendacion("Morosidad por producto", "monto_cuotas_vencidas", "producto", "Dónde se concentran las cuotas vencidas sin pagar"),
+        Recomendacion("Monto de cuotas por estado en torta", "monto_cuotas", "estado_cuota", "Qué parte está pagada, pendiente o vencida"),
+        Recomendacion("Morosidad por región en mapa", "monto_cuotas_vencidas", "region", "Dónde está la deuda atrasada"),
+        Recomendacion("Cobranza por mes", "monto_cuotas_pagadas", MES, "Cuánto se cobra cada mes"),
     ),
 }
+
+
+@dataclass(frozen=True)
+class GraficoPaquete:
+    titulo: str
+    metrica: str
+    agrupar_por: str
+    tipo: str
+    lectura: str             # la pregunta de negocio que responde
+    tendencia: bool = False  # True: los 12 meses que terminan en el período, para dar contexto
+    comparar: str = ""
+
+
+@dataclass(frozen=True)
+class Paquete:
+    nombre: str
+    para_que: str
+    graficos: tuple[GraficoPaquete, ...]
+
+
+# Dashboards completos de un área para un período ("dashboard de siniestros de abril").
+# Siguen el orden en que se lee un informe: primero las cifras clave contra el período
+# anterior, luego la tendencia del último año para dar contexto, y al final dónde y en
+# qué se concentra. Lo arma el backend sin IA: siempre sale igual de completo.
+PAQUETES: dict[str, Paquete] = {
+    "SIN": Paquete("Resumen de siniestros", "Cuántos casos llegaron, cuánto se pagó, la tendencia del último año, "
+                   "y dónde y en qué tipo de siniestro se concentra el gasto.", (
+        GraficoPaquete("Siniestros del período", "cantidad_siniestros", NINGUNO, "kpi",
+                       "¿Llegaron más o menos casos que en el período anterior?", comparar="periodo_anterior"),
+        GraficoPaquete("Monto pagado del período", "monto_pagado", NINGUNO, "kpi",
+                       "¿Cuánto se pagó y cómo se compara con el período anterior?", comparar="periodo_anterior"),
+        GraficoPaquete("Siniestros por mes · últimos 12 meses", "cantidad_siniestros", MES, "grafico_lineas",
+                       "¿El período es normal o se sale de la tendencia del último año?", tendencia=True),
+        GraficoPaquete("Monto pagado por región", "monto_pagado", "region", "grafico_mapa",
+                       "¿En qué regiones se concentra el gasto?"),
+        GraficoPaquete("Monto pagado por tipo de siniestro", "monto_pagado", "tipo_siniestro", "grafico_barras",
+                       "¿Qué tipo de siniestro explica la mayor parte del gasto?"),
+        GraficoPaquete("Siniestros por producto", "cantidad_siniestros", "producto", "grafico_barras",
+                       "¿Qué línea de negocio genera más casos?"),
+    )),
+    "FIN": Paquete("Resumen de primas", "Cuánto ingresó por primas y comisiones, la tendencia del último año y qué "
+                   "productos y regiones aportan más.", (
+        GraficoPaquete("Prima directa neta del período", "prima_total", NINGUNO, "kpi",
+                       "¿Cuánto ingresó por primas, ya descontadas las anulaciones?", comparar="periodo_anterior"),
+        GraficoPaquete("Comisiones del período", "comision_total", NINGUNO, "kpi",
+                       "¿Cuánto costó la intermediación?", comparar="periodo_anterior"),
+        GraficoPaquete("Prima directa neta por mes · últimos 12 meses", "prima_total", MES, "grafico_lineas",
+                       "¿El período es normal o se sale de la tendencia del último año?", tendencia=True),
+        GraficoPaquete("Prima directa neta por producto", "prima_total", "producto", "grafico_barras",
+                       "¿Qué productos aportan más ingresos?"),
+        GraficoPaquete("Prima retenida neta por región", "prima_retenida", "region", "grafico_barras",
+                       "¿Cuánto queda en la compañía, tras el reaseguro, en cada región?"),
+        GraficoPaquete("Movimientos de prima por tipo", "cantidad_movimientos", "tipo_movimiento", "grafico_torta",
+                       "¿Cuántas emisiones y cuántas anulaciones hubo?"),
+    )),
+    "SEG": Paquete("Cartera de pólizas", "Cuántas pólizas se emitieron, cuánta exposición entró, la tendencia del "
+                   "último año y cómo se reparte la cartera.", (
+        GraficoPaquete("Pólizas emitidas en el período", "cantidad_polizas", NINGUNO, "kpi",
+                       "¿Se emitieron más o menos pólizas que en el período anterior?", comparar="periodo_anterior"),
+        GraficoPaquete("Monto asegurado emitido", "monto_asegurado", NINGUNO, "kpi",
+                       "¿Cuánta exposición nueva entró a la cartera?", comparar="periodo_anterior"),
+        GraficoPaquete("Pólizas emitidas por mes · últimos 12 meses", "cantidad_polizas", MES, "grafico_lineas",
+                       "¿El ritmo de ventas es normal o se sale de la tendencia?", tendencia=True),
+        GraficoPaquete("Monto asegurado por producto", "monto_asegurado", "producto", "grafico_barras",
+                       "¿En qué productos se concentra la exposición?"),
+        GraficoPaquete("Pólizas emitidas por región", "cantidad_polizas", "region", "grafico_barras",
+                       "¿Dónde se vende más?"),
+        GraficoPaquete("Ítems asegurados por segmento", "cantidad_items", "segmento", "grafico_torta",
+                       "¿A qué segmento de clientes se vende?"),
+    )),
+    "CUO": Paquete("Cobranza de cuotas", "Lo vencido sin pagar, lo cobrado, cómo se reparten las cuotas por estado "
+                   "y dónde está la morosidad.", (
+        GraficoPaquete("Cuotas vencidas sin pagar", "monto_cuotas_vencidas", NINGUNO, "kpi",
+                       "¿Cuánta morosidad hay en las cuotas que vencían en el período?"),
+        GraficoPaquete("Cuotas pagadas", "monto_cuotas_pagadas", NINGUNO, "kpi",
+                       "¿Cuánto se cobró de lo que vencía en el período?", comparar="periodo_anterior"),
+        GraficoPaquete("Cuotas por estado", "monto_cuotas", "estado_cuota", "grafico_torta",
+                       "¿Qué parte está pagada, pendiente o vencida?"),
+        GraficoPaquete("Cuotas vencidas por producto", "monto_cuotas_vencidas", "producto", "grafico_barras",
+                       "¿En qué productos se concentra la morosidad?"),
+        GraficoPaquete("Cuotas pagadas por mes · últimos 12 meses", "monto_cuotas_pagadas", MES, "grafico_lineas",
+                       "¿La cobranza viene mejor o peor que en el último año?", tendencia=True),
+    )),
+}
+
+
+def graficos_paquete(dominio: "DominioDisponible", cod: str) -> list[GraficoPaquete]:
+    """Los gráficos del dashboard del área que el catálogo actual permite armar."""
+    paquete = PAQUETES.get(cod)
+    if not paquete:
+        return []
+    return [g for g in paquete.graficos if g.metrica in dominio.medidas and g.agrupar_por in dominio.dimensiones()]
+
 
 # Series que conviene proyectar (módulo "Proyecciones"), con la decisión que apoyan.
 # Las demás métricas proyectables también se ofrecen, sin recomendación.
 PROYECCIONES: dict[str, dict[str, str]] = {
     "SIN": {
-        "cantidad_siniestros": "Anticipa cuántos siniestros llegarán: carga de trabajo de liquidación y reservas por constituir.",
-        "monto_denunciado": "Anticipa el costo que se denunciará en los próximos meses.",
+        "cantidad_siniestros": "Cuántos casos van a llegar: sirve para planificar liquidadores y reservas.",
+        "monto_denunciado": "Cuánto se va a reclamar: anticipa el costo que viene.",
     },
     "FIN": {
-        "prima_total": "Estima los ingresos por primas del próximo trimestre, ya descontadas las anulaciones.",
-        "prima_retenida": "Estima la prima que queda en la compañía después del reaseguro.",
+        "prima_total": "Cuánto va a ingresar por primas: la base del presupuesto de ingresos.",
+        "prima_retenida": "Cuánto de esa prima se queda en la compañía después del reaseguro.",
     },
     "SEG": {
-        "cantidad_polizas": "Ritmo de ventas nuevas: pólizas emitidas por mes.",
-        "monto_asegurado": "Exposición nueva que se sumará a la cartera cada mes.",
+        "cantidad_polizas": "Cuántas pólizas se van a vender: el ritmo comercial.",
+        "monto_asegurado": "Cuánta exposición nueva va a entrar a la cartera.",
     },
 }
 
@@ -352,6 +444,18 @@ class DominioDisponible:
     con_fecha: bool
     valores: dict[str, list[str]] = field(default_factory=dict)  # atributo -> valores posibles
     rango_meses: tuple[str, str] | None = None
+    registros_por_mes: dict[str, int] = field(default_factory=dict)  # AAAA-MM -> cantidad de registros
+
+    def mes_recomendado(self, ultimo_completo: str) -> str:
+        """Mes que se propone para su dashboard: el último ya terminado con un volumen normal
+        (al menos la mitad del mes típico). Si los últimos meses casi no tienen registros
+        (carga incompleta), un dashboard de ellos se calcularía sobre 1 o 2 filas."""
+        conteos = {m: n for m, n in self.registros_por_mes.items() if m <= ultimo_completo}
+        if not conteos:
+            return ultimo_completo
+        tipico = sorted(conteos.values())[len(conteos) // 2]
+        normales = [m for m, n in conteos.items() if n >= tipico / 2]
+        return max(normales) if normales else ultimo_completo
 
     def dimensiones(self) -> list[str]:
         return [NINGUNO, *self.atributos, *([MES] if self.con_fecha else [])]
@@ -444,6 +548,7 @@ def _cargar_dominio(definicion: DefinicionDominio, columnas: dict[str, set[str]]
     }
     if dominio.con_fecha:
         dominio.rango_meses = db.rango_meses(origen, sql_columna(definicion.fecha.columna))
+        dominio.registros_por_mes = db.registros_por_mes(origen, sql_columna(definicion.fecha.columna))
     return dominio
 
 

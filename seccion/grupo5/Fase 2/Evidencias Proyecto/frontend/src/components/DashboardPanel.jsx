@@ -70,7 +70,9 @@ export function GraficoPrincipal({
             {sentido.flecha} {textoVariacion(comparacion.variacion)} frente a {fmt(comparacion.total)}
           </span>
         )}
-        <span className="report-kpi-caption">calculado sobre {cantidad} {unidad}</span>
+        <span className="report-kpi-caption">
+          calculado sobre {cantidad} {cantidad === 1 ? unidad.replace(/s$/, '') : unidad}
+        </span>
       </div>
     )
   }

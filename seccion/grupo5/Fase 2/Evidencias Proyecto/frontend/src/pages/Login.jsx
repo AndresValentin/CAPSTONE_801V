@@ -16,7 +16,7 @@ const DEMO_BARRAS = [
 const BENEFICIOS = [
   { icono: MessagesSquare, titulo: 'Sin escribir SQL', texto: 'Pregunta como hablas' },
   { icono: MapPin, titulo: 'Visión por región', texto: 'Gráficos y mapa de Chile' },
-  { icono: FileDown, titulo: 'Listo para compartir', texto: 'Power BI o HTML interactivo' },
+  { icono: FileDown, titulo: 'Listo para compartir', texto: 'Dashboards compartidos o HTML interactivo' },
 ]
 
 // `recuperar` = se llegó por /recuperar; el enlace del correo trae #token=...

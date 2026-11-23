@@ -15,7 +15,7 @@ export default function ModalGuardarDashboard({ nombreInicial, graficos, onCerra
   const navigate = useNavigate()
   const [carpetas, setCarpetas] = useState(null)
   const [datos, setDatos] = useState({ nombre: nombreInicial.slice(0, 100), descripcion: '', carpeta: '', nuevaCarpeta: '' })
-  const [estado, setEstado] = useState({ guardando: false, error: '', guardadoId: null })
+  const [estado, setEstado] = useState({ guardando: false, error: '', guardadoId: null, omitidos: [] })
   const cambiar = (campo, valor) => setDatos((d) => ({ ...d, [campo]: valor }))
   // El padre crea esta función en cada render: se guarda aparte para cargar las carpetas una sola vez
   const sesionExpirada = useRef(onSesionExpirada)
@@ -42,19 +42,19 @@ export default function ModalGuardarDashboard({ nombreInicial, graficos, onCerra
       setEstado((s) => ({ ...s, error: nueva ? 'Escribe el nombre de la carpeta y del dashboard.' : 'Escribe un nombre para el dashboard.' }))
       return
     }
-    setEstado({ guardando: true, error: '', guardadoId: null })
+    setEstado({ guardando: true, error: '', guardadoId: null, omitidos: [] })
     try {
       const carpeta = nueva ? (await crearCarpeta({ nombre: datos.nuevaCarpeta.trim(), descripcion: '' })).id : Number(datos.carpeta)
-      const { id } = await guardarDashboard({
+      const { id, omitidos = [] } = await guardarDashboard({
         carpeta, nombre: datos.nombre.trim(), descripcion: datos.descripcion.trim(), graficos,
       })
-      setEstado({ guardando: false, error: '', guardadoId: id })
+      setEstado({ guardando: false, error: '', guardadoId: id, omitidos })
     } catch (err) {
       if (err.estado === 401) {
         onSesionExpirada?.()
         return
       }
-      setEstado({ guardando: false, error: err.message || 'No se pudo guardar el dashboard.', guardadoId: null })
+      setEstado({ guardando: false, error: err.message || 'No se pudo guardar el dashboard.', guardadoId: null, omitidos: [] })
     }
   }
 
@@ -81,6 +81,13 @@ export default function ModalGuardarDashboard({ nombreInicial, graficos, onCerra
         {estado.guardadoId ? (
           <>
             <p className="usuarios-ok" role="status">Dashboard guardado. Los miembros de la carpeta ya pueden verlo.</p>
+            {estado.omitidos.length > 0 && (
+              <div className="form-error" role="alert">
+                {estado.omitidos.length === 1 ? 'Un gráfico no se incluyó' : `${estado.omitidos.length} gráficos no se incluyeron`} porque
+                ya no calzan con el catálogo actual:
+                <ul>{estado.omitidos.map((o) => <li key={o.titulo}>«{o.titulo}»: {o.motivo}</li>)}</ul>
+              </div>
+            )}
             <div className="usuarios-acciones">
               <button type="button" className="usuarios-secundario" onClick={onCerrar}>Seguir en el chat</button>
               <button type="button" className="modal-boton" onClick={() => navigate(`/dashboards/${estado.guardadoId}`)}>Abrir dashboard</button>

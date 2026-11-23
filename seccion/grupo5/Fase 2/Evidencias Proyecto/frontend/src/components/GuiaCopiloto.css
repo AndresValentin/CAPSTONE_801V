@@ -1,0 +1,142 @@
+/* Guía "Cómo pedir un buen reporte" (GuiaCopiloto.jsx) */
+.modal-guia {
+  width: min(780px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+}
+
+.guia-seccion h3 {
+  margin: 0 0 6px;
+  font-size: 14.5px;
+  color: var(--color-primary);
+}
+
+.guia-seccion p,
+.guia-seccion li {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.guia-seccion ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.guia-partes {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 8px;
+}
+
+.guia-partes div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 10px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  background: var(--color-surface-2);
+  border-radius: 7px;
+}
+
+.guia-partes dt {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.guia-partes dd {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.guia-ejemplo {
+  color: var(--color-text-muted);
+}
+
+.guia-areas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 12px;
+}
+
+.guia-area {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.guia-area > strong {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.guia-probar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 10px;
+  font: inherit;
+  text-align: left;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.guia-probar:hover {
+  border-color: var(--color-primary);
+}
+
+.guia-probar svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--color-primary);
+}
+
+.guia-probar span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.guia-probar b {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.guia-probar small {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+
+.guia-palabras {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.guia-palabras td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.guia-palabras td:first-child {
+  width: 45%;
+  color: var(--color-text-muted);
+}
+
+.guia-nota {
+  margin-top: 8px !important;
+  font-size: 12px !important;
+  color: var(--color-text-muted) !important;
+}
+
+@media (max-width: 560px) {
+  .guia-partes div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}

@@ -21,6 +21,11 @@ export function textoVariacion(variacion) {
   return `${signo}${PORCENTAJE.format(Math.abs(variacion))} %`
 }
 
+// Variación sin signo, para frases como "sube 12,0 %"
+export function textoVariacionAbsoluta(variacion) {
+  return `${PORCENTAJE.format(Math.abs(variacion))} %`
+}
+
 // La flecha y el texto dicen la dirección; el color solo dice si es buena noticia
 export function sentidoVariacion(variacion, mejorSiBaja) {
   if (!variacion) return { flecha: '→', clase: 'variacion-neutra', lectura: 'sin cambio' }
@@ -35,7 +40,7 @@ export function serieConAnalisis(serie, proyeccion) {
   const atipicos = new Set((proyeccion?.anomalias ?? []).map((a) => a.mes))
   const filas = serie.map((f) => ({ ...f, atipico: atipicos.has(f.categoria) ? f.valor : null }))
   if (!proyeccion?.meses?.length) return filas
-  // La línea proyectada parte del último mes real usado en la regresión
+  // La línea proyectada parte del último mes real usado para entrenar el modelo
   const base = filas.find((f) => f.categoria === proyeccion.base.hasta)
   if (base) Object.assign(base, { proyectado: base.valor, rango: [base.valor, base.valor] })
   proyeccion.meses.forEach((p) => {

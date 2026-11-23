@@ -12,6 +12,21 @@ export function formatCLPCorto(valor) {
   return CLP.format(valor)
 }
 
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre',
+  'octubre', 'noviembre', 'diciembre']
+
+// '2026-04' -> 'abril 2026'
+export function nombreMes(mes) {
+  const [anio, numero] = (mes ?? '').split('-')
+  return MESES[Number(numero) - 1] ? `${MESES[Number(numero) - 1]} ${anio}` : mes
+}
+
+// '2026-04' -> 'abr 26' (ejes de gráficos)
+export function mesCorto(mes) {
+  const [anio, numero] = (mes ?? '').split('-')
+  return MESES[Number(numero) - 1] ? `${MESES[Number(numero) - 1].slice(0, 3)} ${anio.slice(2)}` : mes
+}
+
 export function formatMetrica(valor, esMoneda) {
   return esMoneda ? formatCLP(valor) : NUMERO.format(valor)
 }

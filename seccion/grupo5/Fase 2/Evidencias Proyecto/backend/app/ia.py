@@ -6,6 +6,7 @@ consultas.py valida ese plan y arma el SQL parametrizado.
 """
 
 import os
+from datetime import date
 from typing import Literal
 
 import anthropic
@@ -26,7 +27,8 @@ class FiltroPlan(BaseModel):
 
 
 class PlanConsulta(BaseModel):
-    accion: Literal["consultar", "rechazar", "aclarar"]
+    # "dashboard": pide un informe completo de un área; el backend arma los gráficos (catalogo.PAQUETES)
+    accion: Literal["consultar", "rechazar", "aclarar", "dashboard"]
     motivo_rechazo: str
     dominio: str = Field(max_length=10)
     titulo: str
@@ -59,7 +61,7 @@ def _schema_plan(cat: catalogo.Catalogo, dominios_usuario: set[str]) -> dict:
     return {
         "type": "object",
         "properties": {
-            "accion": {"type": "string", "enum": ["consultar", "rechazar", "aclarar"]},
+            "accion": {"type": "string", "enum": ["consultar", "rechazar", "aclarar", "dashboard"]},
             "motivo_rechazo": {"type": "string"},
             "dominio": {"type": "string", "enum": list(cat.dominios)},
             "titulo": {"type": "string"},
@@ -88,12 +90,32 @@ def _schema_plan(cat: catalogo.Catalogo, dominios_usuario: set[str]) -> dict:
     }
 
 
-def _system_prompt(cat: catalogo.Catalogo, dominios_usuario: set[str]) -> str:
+_CONTEXTO_NEGOCIO = """Contexto del negocio (una aseguradora):
+- SEG, pólizas y cartera: la compañía vende pólizas; cada póliza cubre uno o más ítems asegurados por un monto asegurado (la exposición). "Ventas" o "pólizas nuevas" se miden con la cantidad de pólizas emitidas; "exposición" o "capital asegurado" con el monto asegurado.
+- FIN, primas: la prima es lo que paga el cliente por la póliza. La prima directa neta ya descuenta las anulaciones; una parte se cede a reaseguradoras (prima cedida) y el resto queda en la compañía (prima retenida). Las comisiones se pagan a los intermediarios. "Ingresos", "venta en plata" o "primas" -> prima directa neta.
+- CUO, cuotas y cobranza: las primas se pagan en cuotas. Pagadas = cobranza; pendientes = aún no vencen; vencidas sin pagar = morosidad o deuda atrasada.
+- SIN, siniestros: un siniestro es un evento cubierto que el cliente denuncia. Monto denunciado = lo que se reclama; reserva = lo que se estima pagar y aún no se paga; pagado = lo ya pagado; recuperado = lo que vuelve por deducibles o terceros. "Gasto", "costo" o "cuánto pagamos" -> monto pagado; "casos" o "cuántos siniestros" -> cantidad de siniestros; "lo reclamado" -> monto denunciado."""
+
+
+def _system_prompt(cat: catalogo.Catalogo, dominios_usuario: set[str], hoy: date | None = None) -> str:
+    hoy = hoy or date.today()
     return f"""Eres el intérprete de consultas de BI Ruta Smart, una herramienta de reportes para una aseguradora.
 Tu trabajo es convertir la pregunta del usuario en un plan de consulta en JSON. Otro componente valida el plan y ejecuta la consulta: tú no ves los datos ni escribes SQL.
 
+{_CONTEXTO_NEGOCIO}
+
+Hoy es {hoy.isoformat()}.
+
 Catálogo:
 {cat.descripcion_para_ia(dominios_usuario)}
+
+Fechas:
+- Un mes sin año (por ejemplo "abril") es el más reciente que tenga datos según el rango del dominio, nunca uno futuro.
+- "Este mes" es el mes actual; "el mes pasado", el anterior; "este año", de enero del año actual al mes actual; "el último trimestre", los 3 meses completos más recientes con datos; "Q1" es enero a marzo, "Q2" abril a junio, etc.
+
+Dashboards completos:
+- Usa "accion": "dashboard" cuando pida un dashboard, tablero, panel, resumen, informe o "cómo nos fue" de un área (varios gráficos a la vez) sin pedir una métrica puntual. Indica "dominio", el período en "desde" y "hasta" ("" si no lo dice: el backend elige el último mes con datos completos) y los filtros que mencione; completa el resto con cualquier valor válido y deja "motivo_rechazo" vacío. El backend arma los gráficos: cifras clave contra el período anterior, la tendencia del último año y el reparto por región, producto y tipo.
+- Si pide un dashboard sin decir el área: usa el área en pantalla; si no hay, y el usuario puede consultar una sola área, usa esa; si no, usa "aclarar" y pregunta de qué área lo quiere (siniestros, primas, pólizas o cuotas) y de qué mes.
 
 Cómo armar el plan:
 - En "dominio" indica a qué dominio de negocio pertenece la pregunta (siniestros, reservas o recuperos -> SIN; primas o comisiones -> FIN; cuotas, cobranza, pagos pendientes o morosidad -> CUO; pólizas, clientes, cartera o montos asegurados -> SEG), aunque ese dominio no tenga detalle en el catálogo. Otro componente revisa si el usuario tiene acceso.
@@ -104,11 +126,11 @@ Cómo armar el plan:
 - Elige "agrupar_por" según lo que se quiera comparar ("por región" -> region, "por mes" o evolución -> mes); si se pide un único número, "ninguno".
 - Elige "tipo_salida" acorde: un número -> kpi; comparación entre categorías -> grafico_barras; evolución en el tiempo -> grafico_lineas; distribución o reparto -> grafico_torta solo si hay 5 categorías o menos (con más, usa grafico_barras); listado -> tabla; si pide un mapa o ver Chile por región -> grafico_mapa con "agrupar_por": "region". Si el usuario pide un tipo expresamente, respétalo.
 - "comparar": "anio_anterior" si pide comparar con el año pasado o con el mismo período del año anterior; "periodo_anterior" si pide comparar con el mes o período anterior (o "vs antes" sin decir cuál); "" si no pide comparar. No rechaces ni pidas aclaración por esto: otro componente decide si la métrica se puede comparar.
-- "titulo" es un título breve en español para el reporte.
+- "titulo" es un título breve y profesional en español, sin verbos (por ejemplo "Monto pagado por región").
 - Usa "accion": "rechazar" cuando la pregunta pida modificar o borrar datos, pida campos no autorizados (en especial datos personales de clientes) o no tenga relación con el negocio.
 - Usa "accion": "aclarar" cuando la pregunta sea tan vaga que no se pueda saber qué medir (por ejemplo un saludo). En "motivo_rechazo" pregunta qué quiere medir, con qué filtros y cómo quiere verlo (barras, líneas, torta, KPI o tabla).
 - Si la pregunta indica qué medir pero no cómo verlo, no pidas aclaración: elige tú la visualización más adecuada.
-- En "rechazar" y "aclarar" escribe "motivo_rechazo" en español, dirigido al usuario, y completa el resto de campos con cualquier valor válido. Si la acción es "consultar", deja "motivo_rechazo" vacío."""
+- En "rechazar" y "aclarar" escribe "motivo_rechazo" en español, dirigido al usuario, y completa el resto de campos con cualquier valor válido. Al aclarar, sugiere un ejemplo concreto de pregunta que sí funcione. Si la acción es "consultar" o "dashboard", deja "motivo_rechazo" vacío."""
 
 
 def _mensaje_usuario(pregunta: str, filtros_panel: str, area: str = "") -> str:

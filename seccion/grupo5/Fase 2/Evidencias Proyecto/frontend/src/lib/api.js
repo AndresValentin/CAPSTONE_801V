@@ -223,6 +223,12 @@ export function calcularProyeccion(dominio, metrica) {
   return llamar('/api/proyecciones', { dominio, metrica }, tokenActual())
 }
 
+// Dashboard completo recomendado de un área para un mes (AAAA-MM; '' = último mes completo).
+// Devuelve { estado: 'dashboard', titulo, explicacion, graficos: [{ titulo, lectura, plan, interpretacion, resultado }] }
+export function armarDashboardRecomendado(dominio, mes) {
+  return llamar('/api/paquetes', { dominio, mes }, tokenActual())
+}
+
 // Las formas de las regiones no cambian: se piden una vez por sesión
 let mapaChile = null
 export function obtenerMapaChile() {
@@ -233,10 +239,9 @@ export function obtenerMapaChile() {
   return mapaChile
 }
 
-// Descarga el reporte. `formato` = 'html' o 'powerbi'; `graficos` = [{ titulo, plan }].
+// Descarga el reporte. `formato` = 'html'; `graficos` = [{ titulo, plan }].
 const EXPORTACIONES = {
   html: { ruta: '/api/reporte-html', archivo: 'Reporte_BI_Copilot.html' },
-  powerbi: { ruta: '/api/powerbi', archivo: 'BI_Copilot_PowerBI.zip' },
 }
 
 export async function descargarReporte(formato, titulo, graficos) {
@@ -266,4 +271,6 @@ export async function descargarReporte(formato, titulo, graficos) {
   enlace.click()
   enlace.remove()
   URL.revokeObjectURL(url)
+  // Gráficos que el backend dejó fuera porque ya no calzan con el catálogo
+  return { omitidos: Number(res.headers.get('X-Graficos-Omitidos')) || 0 }
 }

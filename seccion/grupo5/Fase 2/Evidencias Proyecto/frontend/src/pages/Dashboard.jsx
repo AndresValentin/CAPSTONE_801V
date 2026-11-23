@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Sparkles, Database, LayoutGrid, LogOut, PanelLeft } from 'lucide-react'
+import AsaRedimensionar from '../components/AsaRedimensionar.jsx'
 import Sidebar from '../components/Sidebar.jsx'
 import FiltersPanel from '../components/FiltersPanel.jsx'
 import DashboardPanel from '../components/DashboardPanel.jsx'
 import ChatCopilot from '../components/ChatCopilot.jsx'
+import GuiaCopiloto from '../components/GuiaCopiloto.jsx'
 import ReportTemplate from '../components/ReportTemplate.jsx'
 import ReporteGraficos from '../components/ReporteGraficos.jsx'
 import ReporteBD from '../components/ReporteBD.jsx'
@@ -12,14 +14,39 @@ import FiltrosBD from '../components/FiltrosBD.jsx'
 import { FILTROS_INICIALES, completarFiltros, filtrarSiniestros, siniestrosBase } from '../data/mockData.js'
 import { useConversaciones, reportesDe, graficosDe } from '../hooks/useConversaciones.js'
 import {
-  cerrarSesion, interpretar, leerSesion, obtenerCatalogo, reejecutarReporte, usaBackend,
+  armarDashboardRecomendado, cerrarSesion, interpretar, leerSesion, obtenerCatalogo, reejecutarReporte, usaBackend,
 } from '../lib/api.js'
 import { procesarArchivo } from '../lib/importacion.js'
 import { guardarLocal, leerLocal } from '../lib/persistencia.js'
+import { tituloGrafico } from '../lib/graficos.js'
+import { nombreMes } from '../lib/formato.js'
 import './Dashboard.css'
 
 const CLAVE_IMPORTADOS = 'bi-copilot:importados'
 const PANEL_VACIO = { dominio: '', filtros: {}, desde: '', hasta: '', comparar: '' }
+
+// Anchos ajustables del historial (izquierda) y del chat (derecha). El centro nunca queda
+// más angosto que MIN_CENTRO, para que los gráficos y los filtros se sigan leyendo bien.
+const HISTORIAL = { clave: 'bi-copilot:ancho-historial', porDefecto: 272, min: 220, max: 440 }
+const CHAT = { clave: 'bi-copilot:ancho-chat', porDefecto: 360, min: 300, max: 600 }
+const MIN_CENTRO = 520
+const MARGENES = 68 // padding y separación del área central
+const ANCHO_CON_CHAT_AL_LADO = 1200 // bajo esto el chat va debajo (ver Dashboard.css)
+
+// Serie mensual guardada con huecos (meses sin registros que antes no se completaban)
+function faltanMeses(grafico) {
+  if (grafico.interpretacion?.agruparPor !== 'mes') return false
+  const indices = grafico.resultado.serie
+    .map((f) => /^(\d{4})-(\d{2})$/.exec(f.categoria ?? ''))
+    .filter(Boolean)
+    .map(([, anio, mes]) => Number(anio) * 12 + Number(mes))
+  return indices.some((v, i) => i > 0 && v - indices[i - 1] > 1)
+}
+
+function anchoGuardado({ clave, porDefecto, min, max }) {
+  const valor = Number(leerLocal(clave, porDefecto))
+  return Number.isFinite(valor) ? Math.min(max, Math.max(min, valor)) : porDefecto
+}
 
 // Filtros del panel a partir del plan de un reporte del backend
 function panelDesdePlan(plan) {
@@ -39,6 +66,8 @@ function ultimoReporte(conversacion) {
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [guiaAbierta, setGuiaAbierta] = useState(false)
   const [sesion] = useState(leerSesion)
   const chats = useConversaciones(sesion?.usuario)
   // Chat que el usuario tiene abierto ahora (las respuestas pueden llegar después de cambiarlo)
@@ -57,20 +86,81 @@ export default function Dashboard() {
   // Cada recálculo lleva un número; solo se aplica la respuesta del último.
   // Así una respuesta lenta no pisa a una más nueva ni cae sobre otro reporte.
   const ultimoRecalculo = useRef(0)
+  const cuerpoRef = useRef(null)
+  const [anchoHistorial, setAnchoHistorial] = useState(() => anchoGuardado(HISTORIAL))
+  const [anchoChat, setAnchoChat] = useState(() => anchoGuardado(CHAT))
 
   useEffect(() => { guardarLocal(CLAVE_IMPORTADOS, importados) }, [importados])
+  useEffect(() => { guardarLocal(HISTORIAL.clave, anchoHistorial) }, [anchoHistorial])
+  useEffect(() => { guardarLocal(CHAT.clave, anchoChat) }, [anchoChat])
+
+  // Máximos según la ventana: lo que deja libre el otro panel y el mínimo del centro
+  const chatAlLado = () => window.innerWidth > ANCHO_CON_CHAT_AL_LADO
+  const maxHistorial = () => Math.max(HISTORIAL.min, Math.min(HISTORIAL.max,
+    window.innerWidth - (chatAlLado() ? anchoChat : 0) - MIN_CENTRO - MARGENES))
+  const maxChat = () => Math.max(CHAT.min, Math.min(CHAT.max,
+    window.innerWidth - (sidebarAbierto ? anchoHistorial : 0) - MIN_CENTRO - MARGENES))
 
   // Con backend, sin sesión no se sabe qué dominios puede consultar el usuario
   useEffect(() => {
     if (usaBackend && !sesion) navigate('/', { replace: true })
   }, [sesion, navigate])
 
+  // El catálogo (áreas, filtros, dashboards recomendados) se pide al entrar. Si la base no
+  // responde, se reintenta solo (2 s, 4 s, 8 s… hasta 30 s) y se avisa en pantalla
+  const [errorCatalogo, setErrorCatalogo] = useState('')
+  useEffect(() => {
+    if (!usaBackend || !sesion) return undefined
+    let cancelado = false
+    let temporizador
+    let espera = 2000
+    function cargar() {
+      obtenerCatalogo()
+        .then((c) => {
+          if (cancelado) return
+          setCatalogoBD(c)
+          setErrorCatalogo('')
+        })
+        .catch((err) => {
+          if (cancelado || err.estado === 401) return // un 401 ya cerró la sesión (lib/api.js)
+          setErrorCatalogo(err.estado === 0 ? 'No hay conexión con el servidor.' : err.message || 'No se pudo cargar el catálogo.')
+          temporizador = setTimeout(cargar, espera)
+          espera = Math.min(espera * 2, 30000)
+        })
+    }
+    cargar()
+    return () => {
+      cancelado = true
+      clearTimeout(temporizador)
+    }
+  }, [sesion])
+
+  // Los gráficos del chat guardan su resultado. Se recalculan una vez al abrir el chat, sin
+  // pasar por la IA, los que se guardaron con un cálculo anterior: la proyección por
+  // regresión lineal (podía "saltar" hacia arriba en una serie que baja) o una serie
+  // mensual sin los meses vacíos (2025-05 quedaba pegado a 2026-01).
+  const recalculados = useRef(new Set())
+  const activa = chats.activa
+  const actualizarMensaje = chats.actualizarMensaje
   useEffect(() => {
     if (!usaBackend || !sesion) return
-    obtenerCatalogo()
-      .then(setCatalogoBD)
-      .catch(() => {}) // sin catálogo el panel no se muestra; el detalle quedó en la consola
-  }, [sesion])
+    const viejos = graficosDe(activa).filter((g) => {
+      if (recalculados.current.has(g.id)) return false
+      const p = g.resultado?.proyeccion
+      return (p && !p.omitida && !p.metodo) || faltanMeses(g)
+    })
+    viejos.forEach((g) => {
+      recalculados.current.add(g.id)
+      reejecutarReporte(g.pregunta, g.plan)
+        .then((r) => {
+          if (r.estado !== 'validado') return // ya no calza con el catálogo: queda como estaba
+          const cambios = { plan: r.plan, interpretacion: r.interpretacion, resultado: r.resultado }
+          actualizarMensaje(activa.id, g.id, cambios)
+          setReporteActivo((prev) => (prev?.id === g.id ? { ...prev, ...cambios } : prev))
+        })
+        .catch(() => {}) // sin conexión se reintenta la próxima vez que se abra la página
+    })
+  }, [activa, actualizarMensaje, sesion])
 
   function salir() {
     cerrarSesion()
@@ -172,7 +262,7 @@ export default function Dashboard() {
         return
       }
       setReporteActivo({
-        id: `area-${codigo}`, esVistaArea: true, pregunta: area.nombre,
+        id: `area-${codigo}`, esVistaArea: true, pregunta: area.nombre, titulo: area.nombre,
         plan: r.plan, interpretacion: r.interpretacion, resultado: r.resultado,
       })
       setEstadoPanel({ actualizando: false, error: '' })
@@ -258,8 +348,19 @@ export default function Dashboard() {
     chats.eliminarConversacion(id)
   }
 
-  // Módulo "Proyecciones": agrega la serie mensual con su proyección como un gráfico
-  // más del chat activo, para filtrarla, compararla o guardarla en un dashboard
+  // Pantalla "Proyecciones": vuelve aquí con la serie elegida para sumarla al reporte.
+  // Se procesa una vez y se borra del historial, para que recargar no la agregue de nuevo.
+  const proyeccionRecibida = useRef(false)
+  useEffect(() => {
+    const recibida = location.state?.proyeccion
+    if (!recibida || proyeccionRecibida.current) return
+    proyeccionRecibida.current = true
+    navigate(location.pathname, { replace: true, state: null })
+    verProyeccion(recibida.respuesta, recibida.serie)
+  })
+
+  // Agrega la serie mensual con su proyección como un gráfico más del chat activo,
+  // para filtrarla, compararla o guardarla en un dashboard
   function verProyeccion(respuesta, serie) {
     const conversacionId = chats.activa.id
     const pregunta = `Proyección de ${serie.etiqueta.toLowerCase()} (${serie.area})`
@@ -268,14 +369,83 @@ export default function Dashboard() {
       rol: 'asistente',
       tipo: 'validado',
       pregunta,
-      texto: 'Agregué la serie mensual con su proyección por regresión lineal al reporte.',
+      titulo: `Proyección de ${serie.etiqueta.toLowerCase()}`,
+      texto: 'Agregué la serie mensual con su proyección al reporte.',
       interpretacion: respuesta.interpretacion,
       resultado: respuesta.resultado,
       plan: respuesta.plan,
       filtros: FILTROS_INICIALES,
     })
+    chats.titularConPrimerGrafico(conversacionId, mensaje.titulo)
     verReporte(mensaje)
     cerrarSidebarEnMovil()
+  }
+
+  // Título de un gráfico editado en su tarjeta; vacío vuelve al automático
+  function renombrarGrafico(mensaje, titulo) {
+    chats.actualizarMensaje(chats.activa.id, mensaje.id, { titulo })
+    setReporteActivo((prev) => (prev?.id === mensaje.id ? { ...prev, titulo } : prev))
+  }
+
+  // Dashboard completo (pedido en el chat o desde una recomendación): un mensaje que lo
+  // resume y un gráfico por cada parte, que el chat agrupa bajo ese mensaje
+  function agregarDashboard(conversacionId, respuesta) {
+    const resumen = chats.agregarMensaje(conversacionId, {
+      rol: 'asistente',
+      tipo: 'dashboard',
+      texto: `Armé el dashboard «${respuesta.titulo}». ${respuesta.explicacion}`,
+      titulo: respuesta.titulo,
+    })
+    const mensajes = respuesta.graficos.map((g) => chats.agregarMensaje(conversacionId, {
+      rol: 'asistente',
+      tipo: 'validado',
+      grupo: resumen.id,
+      pregunta: g.titulo,
+      titulo: g.titulo,
+      lectura: g.lectura,
+      interpretacion: g.interpretacion,
+      resultado: g.resultado,
+      plan: g.plan,
+      filtros: FILTROS_INICIALES,
+    }))
+    chats.titularConPrimerGrafico(conversacionId, respuesta.titulo, mensajes.length)
+    if (activaIdRef.current === conversacionId) verReporte(mensajes[0])
+  }
+
+  function errorDeChat(conversacionId, err) {
+    // 502 (la IA falló), 503 (sin BD) y 403 (cuenta inactiva) traen un motivo útil
+    const conMotivo = [403, 502, 503].includes(err.estado) && err.message
+    chats.agregarMensaje(conversacionId, {
+      rol: 'asistente',
+      tipo: 'error',
+      texto: conMotivo
+        ? `No pude generar el reporte: ${err.message}`
+        : err.estado === 0
+          ? 'No hay conexión con el servidor. Revisa tu red e intenta nuevamente.'
+          : 'No pude generar el reporte en este momento. Intenta nuevamente en unos minutos.',
+    })
+  }
+
+  // Dashboards recomendados del chat: se arman sin pasar por la IA
+  async function pedirDashboardRecomendado(dominio, mes) {
+    if (pensandoEn) return
+    const conversacionId = chats.activa.id
+    const area = catalogoBD?.dominios.find((d) => d.codigo === dominio)
+    chats.agregarMensaje(conversacionId, { rol: 'usuario', texto: `Dashboard de ${area?.nombre.toLowerCase() ?? dominio} de ${nombreMes(mes)}` })
+    setPensandoEn(conversacionId)
+    try {
+      const r = await armarDashboardRecomendado(dominio, mes)
+      if (r.estado === 'dashboard') agregarDashboard(conversacionId, r)
+      else chats.agregarMensaje(conversacionId, { rol: 'asistente', tipo: r.estado === 'aclaracion' ? 'aclaracion' : 'rechazo', texto: r.motivo })
+    } catch (err) {
+      if (err.estado === 401) {
+        salir()
+        return
+      }
+      errorDeChat(conversacionId, err)
+    } finally {
+      setPensandoEn(null)
+    }
   }
 
   async function enviarPregunta(pregunta) {
@@ -288,7 +458,9 @@ export default function Dashboard() {
       // heredarlos los siguientes. Solo aplica en la plantilla, antes del primer gráfico.
       const { dominio: _dominio, ...filtrosPanel } = graficos.length > 0 ? PANEL_VACIO : panel
       const resultado = await interpretar(pregunta, { ...filtrosPanel, area: areaActiva })
-      if (resultado.estado === 'validado') {
+      if (resultado.estado === 'dashboard') {
+        agregarDashboard(conversacionId, resultado)
+      } else if (resultado.estado === 'validado') {
         const mensaje = chats.agregarMensaje(conversacionId, {
           rol: 'asistente',
           tipo: 'validado',
@@ -300,6 +472,7 @@ export default function Dashboard() {
             ? { resultado: resultado.resultado, plan: resultado.plan, filtros: FILTROS_INICIALES }
             : { filtros: completarFiltros(resultado.interpretacion.filtros) }),
         })
+        if (resultado.resultado) chats.titularConPrimerGrafico(conversacionId, tituloGrafico(mensaje))
         if (activaIdRef.current === conversacionId) verReporte(mensaje)
       } else {
         // 'aclaracion': faltan datos para armar el reporte y el asistente los pide.
@@ -318,17 +491,7 @@ export default function Dashboard() {
         salir()
         return
       }
-      // 502 (la IA falló), 503 (sin BD) y 403 (cuenta inactiva) traen un motivo útil
-      const conMotivo = [403, 502, 503].includes(err.estado) && err.message
-      chats.agregarMensaje(conversacionId, {
-        rol: 'asistente',
-        tipo: 'error',
-        texto: conMotivo
-          ? `No pude generar el reporte: ${err.message}`
-          : err.estado === 0
-            ? 'No hay conexión con el servidor. Revisa tu red e intenta nuevamente.'
-            : 'No pude generar el reporte en este momento. Intenta nuevamente en unos minutos.',
-      })
+      errorDeChat(conversacionId, err)
     } finally {
       setPensandoEn(null)
     }
@@ -406,7 +569,11 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="dashboard-body">
+      <div
+        className="dashboard-body"
+        ref={cuerpoRef}
+        style={{ '--ancho-sidebar': `${anchoHistorial}px`, '--ancho-chat': `${anchoChat}px` }}
+      >
         <Sidebar
           abierto={sidebarAbierto}
           conversaciones={chats.conversaciones}
@@ -421,12 +588,29 @@ export default function Dashboard() {
           sesion={sesion}
           onSalir={salir}
           modoDemo={!usaBackend}
-          onVerProyeccion={verProyeccion}
         />
         {sidebarAbierto && <div className="sidebar-backdrop" onClick={() => setSidebarAbierto(false)} />}
+        {sidebarAbierto && (
+          <AsaRedimensionar
+            className="asa-historial"
+            etiqueta="Ancho del historial"
+            contenedor={cuerpoRef}
+            variable="--ancho-sidebar"
+            ancho={anchoHistorial}
+            min={HISTORIAL.min}
+            max={maxHistorial}
+            porDefecto={HISTORIAL.porDefecto}
+            onCambiar={setAnchoHistorial}
+          />
+        )}
 
         <main className="workspace">
           <div className="main-column">
+            {usaBackend && !catalogoBD && errorCatalogo && (
+              <p className="aviso-conexion" role="status">
+                {errorCatalogo} Reintentando… Los gráficos que ya están en el chat se siguen viendo.
+              </p>
+            )}
             {graficos.length > 0 ? (
               <ReporteGraficos
                 titulo={chats.activa.titulo}
@@ -437,6 +621,7 @@ export default function Dashboard() {
                 onSeleccionar={abrirReporte}
                 onQuitar={quitarDelReporte}
                 onRenombrar={(titulo) => chats.renombrarConversacion(chats.activa.id, titulo)}
+                onRenombrarGrafico={renombrarGrafico}
                 onSesionExpirada={salir}
               />
             ) : reporteActivo?.esVistaArea ? (
@@ -457,6 +642,19 @@ export default function Dashboard() {
             )}
           </div>
 
+          <AsaRedimensionar
+            className="asa-chat"
+            etiqueta="Ancho del chat"
+            contenedor={cuerpoRef}
+            variable="--ancho-chat"
+            ancho={anchoChat}
+            min={CHAT.min}
+            max={maxChat}
+            porDefecto={CHAT.porDefecto}
+            invertido
+            onCambiar={setAnchoChat}
+          />
+
           <ChatCopilot
             conversacion={chats.activa}
             catalogo={catalogoBD}
@@ -467,9 +665,19 @@ export default function Dashboard() {
             onAdjuntar={usaBackend ? null : importarArchivo}
             onVerReporte={abrirReporte}
             onNuevoChat={nuevoChat}
+            onAbrirGuia={() => setGuiaAbierta(true)}
+            onArmarDashboard={usaBackend ? pedirDashboardRecomendado : null}
           />
         </main>
       </div>
+
+      {guiaAbierta && (
+        <GuiaCopiloto
+          catalogo={usaBackend ? catalogoBD : null}
+          onCerrar={() => setGuiaAbierta(false)}
+          onProbar={(pregunta) => { setGuiaAbierta(false); enviarPregunta(pregunta) }}
+        />
+      )}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import {
   abrirDashboard, actualizarDashboard, cerrarSesion, leerSesion, reejecutarReporte, usaBackend,
 } from '../lib/api.js'
 import { OPCIONES_COMPARAR } from '../lib/analisis.js'
+import { tituloGrafico } from '../lib/graficos.js'
 import './Dashboard.css'
 import '../components/ReporteGraficos.css'
 import '../components/Dashboards.css'
@@ -34,7 +35,7 @@ function GraficoBloqueado({ grafico, onQuitar }) {
   return (
     <article className="chart-card reporte-grafico">
       <header className="reporte-grafico-cabecera">
-        <div><h3>{grafico.pregunta}</h3></div>
+        <div><h3>{tituloGrafico(grafico)}</h3></div>
         {onQuitar && (
           <div className="reporte-grafico-acciones">
             <button type="button" title="Quitar del dashboard" aria-label="Quitar gráfico del dashboard" onClick={() => onQuitar(grafico)}><X size={15} /></button>
@@ -75,7 +76,8 @@ export default function VistaDashboard() {
     abrirDashboard(id)
       .then((d) => {
         setDash(d)
-        setGraficos(d.graficos)
+        // El backend devuelve el título guardado en `pregunta`
+        setGraficos(d.graficos.map((g) => ({ ...g, titulo: g.pregunta })))
         setMeta({ nombre: d.nombre, descripcion: d.descripcion })
         setCambios(false)
         setEstado({ guardando: false, texto: '', error: false, conflicto: false })
@@ -111,7 +113,7 @@ export default function VistaDashboard() {
       if (puedeEditar) setCambios(true)
     } catch (err) {
       if (err.estado === 401) salir()
-      else setEstado((s) => ({ ...s, texto: 'No se pudo recalcular el gráfico.', error: true }))
+      else setEstado((s) => ({ ...s, texto: err.message || 'No se pudo recalcular el gráfico.', error: true }))
     } finally {
       setOcupado(null)
     }
@@ -119,6 +121,11 @@ export default function VistaDashboard() {
 
   function quitar(grafico) {
     setGraficos((lista) => lista.filter((g) => g.id !== grafico.id))
+    setCambios(true)
+  }
+
+  function renombrar(grafico, titulo) {
+    setGraficos((lista) => lista.map((g) => (g.id === grafico.id ? { ...g, titulo } : g)))
     setCambios(true)
   }
 
@@ -134,7 +141,7 @@ export default function VistaDashboard() {
         nombre: meta.nombre.trim() || dash.nombre,
         descripcion: meta.descripcion.trim(),
         version: dash.version,
-        graficos: guardables.map((g) => ({ titulo: g.pregunta.slice(0, 200), plan: g.plan })),
+        graficos: guardables.map((g) => ({ titulo: tituloGrafico(g).slice(0, 200), plan: g.plan })),
       })
       setDash((d) => ({ ...d, version: r.version, nombre: meta.nombre.trim() || d.nombre, descripcion: meta.descripcion.trim() }))
       setCambios(false)
@@ -215,7 +222,7 @@ export default function VistaDashboard() {
             <p className="biblio-aviso">
               Los datos se calcularon recién, con tus permisos.{' '}
               {puedeEditar
-                ? 'Puedes cambiar la comparación de cada gráfico o quitar gráficos y guardar para todos.'
+                ? 'Puedes renombrar gráficos (lápiz o doble clic en el título), cambiar su comparación o quitarlos, y guardar para todos.'
                 : 'Puedes cambiar la comparación de cada gráfico para explorar; como lector, los cambios no se guardan.'}
             </p>
 
@@ -225,6 +232,7 @@ export default function VistaDashboard() {
                   key={g.id}
                   reporte={g}
                   onQuitar={puedeEditar ? quitar : undefined}
+                  onRenombrar={puedeEditar ? renombrar : undefined}
                   controles={<SelectorComparar grafico={g} onCambiar={cambiarComparacion} ocupado={ocupado !== null} />}
                 />
               ) : (

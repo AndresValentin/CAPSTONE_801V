@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Folder, FolderOpen, FolderPlus, Pencil, Sparkles, Trash2, Users } from 'lucide-react'
 import ModalMiembros from '../components/ModalMiembros.jsx'
 import {
@@ -29,7 +29,9 @@ export default function Biblioteca() {
   const navigate = useNavigate()
   const [sesion] = useState(leerSesion)
   const [carpetas, setCarpetas] = useState(null)
-  const [activaId, setActivaId] = useState(null)
+  // /dashboards?carpeta=ID (desde el menú lateral del copiloto) abre esa carpeta
+  const [parametros] = useSearchParams()
+  const [activaId, setActivaId] = useState(() => Number(parametros.get('carpeta')) || null)
   const [nueva, setNueva] = useState('')
   const [editando, setEditando] = useState(false)
   const [miembrosAbierto, setMiembrosAbierto] = useState(false)
@@ -48,7 +50,10 @@ export default function Biblioteca() {
   const cargar = useCallback(() => listarCarpetas()
     .then(({ carpetas: lista }) => {
       setCarpetas(lista)
-      setActivaId((actual) => (lista.some((c) => c.id === actual) ? actual : lista[0]?.id ?? null))
+      // Se abre la carpeta pedida en la URL o la que estaba abierta; si no, la primera propia
+      setActivaId((actual) => (lista.some((c) => c.id === actual)
+        ? actual
+        : (lista.find((c) => c.rol === 'PROPIETARIO') ?? lista[0])?.id ?? null))
     })
     .catch((err) => fallo(err, 'No se pudieron cargar las carpetas.')), [fallo])
 

@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
-import { SquarePen, Search, Trash2, FileUp, BrainCircuit, ChevronDown, MessageSquare, LineChart } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { SquarePen, Search, Trash2, FileUp, BrainCircuit, ChevronDown, ChevronRight, MessageSquare, LineChart, FolderOpen } from 'lucide-react'
 import { reportesDe } from '../hooks/useConversaciones.js'
-import { resumenProyeccion, useProyecciones } from '../hooks/useProyecciones.js'
-import ProyeccionesPanel from './ProyeccionesPanel.jsx'
 import { resumenPorMes } from '../data/mockData.js'
 import { proyectarMonto } from '../lib/regression.js'
 import { formatCLPCorto } from '../lib/formato.js'
@@ -49,13 +48,29 @@ function Modulo({ icono: Icono, titulo, resumen, abierto, onToggle, children }) 
   )
 }
 
+// Acceso a un módulo con pantalla propia (se trabaja cómodo, no en el menú)
+function Lanzador({ icono: Icono, titulo, resumen, onAbrir }) {
+  return (
+    <section className="sb-module">
+      <button type="button" className="sb-module-head" onClick={onAbrir}>
+        <span className="sb-module-icon"><Icono size={14} /></span>
+        <span className="sb-module-text">
+          <span className="sb-module-title">{titulo}</span>
+          <span className="sb-module-summary">{resumen}</span>
+        </span>
+        <ChevronRight size={15} className="sb-module-chevron" />
+      </button>
+    </section>
+  )
+}
+
 export default function Sidebar({
   abierto, conversaciones, activaId, onSeleccionarConversacion, onNuevoChat, onEliminarConversacion,
-  onImportar, totalImportados, onLimpiarImportados, datos, sesion, onSalir, modoDemo = true, onVerProyeccion,
+  onImportar, totalImportados, onLimpiarImportados, datos, sesion, onSalir, modoDemo = true,
 }) {
+  const navigate = useNavigate()
   const [busqueda, setBusqueda] = useState('')
-  const [moduloAbierto, setModuloAbierto] = useState(null) // 'importar' | 'ml' | 'proyecciones' | null
-  const proyecciones = useProyecciones(onSalir)
+  const [moduloAbierto, setModuloAbierto] = useState(null) // 'importar' | 'ml' | null (modo demo)
 
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
@@ -66,7 +81,6 @@ export default function Sidebar({
 
   function alternar(modulo) {
     setModuloAbierto((actual) => (actual === modulo ? null : modulo))
-    if (modulo === 'proyecciones') proyecciones.iniciar()
   }
 
   return (
@@ -115,19 +129,22 @@ export default function Sidebar({
         ))}
       </nav>
 
-      {/* Con backend: proyección por regresión lineal sobre la serie mensual real de SQL
-          Server (backend/app/analisis.py). */}
+      {/* Con backend: módulos con pantalla propia. Carpetas compartidas con sus dashboards
+          (/dashboards) y proyecciones sobre la serie mensual real de SQL Server (/proyecciones). */}
       {!modoDemo && (
         <div className="sb-modules">
-          <Modulo
+          <Lanzador
+            icono={FolderOpen}
+            titulo="Carpetas y compartidos"
+            resumen="Tus dashboards y los compartidos contigo"
+            onAbrir={() => navigate('/dashboards')}
+          />
+          <Lanzador
             icono={LineChart}
             titulo="Proyecciones"
-            resumen={resumenProyeccion(proyecciones)}
-            abierto={moduloAbierto === 'proyecciones'}
-            onToggle={() => alternar('proyecciones')}
-          >
-            <ProyeccionesPanel p={proyecciones} onVerEnReporte={onVerProyeccion} />
-          </Modulo>
+            resumen="Pronóstico de los próximos meses"
+            onAbrir={() => navigate('/proyecciones')}
+          />
         </div>
       )}
 

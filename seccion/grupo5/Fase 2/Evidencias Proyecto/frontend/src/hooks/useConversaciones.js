@@ -62,7 +62,16 @@ export function useConversaciones(usuario) {
   }
 
   function renombrarConversacion(conversacionId, titulo) {
-    setConversaciones((prev) => prev.map((c) => (c.id === conversacionId ? { ...c, titulo } : c)))
+    setConversaciones((prev) => prev.map((c) => (c.id === conversacionId ? { ...c, titulo, tituloManual: true } : c)))
+  }
+
+  // El chat se titula al inicio con la pregunta tal como se escribió. Con sus primeros
+  // gráficos (uno, o los `nuevos` de un dashboard completo) toma un título limpio, salvo
+  // que el usuario ya lo haya renombrado.
+  function titularConPrimerGrafico(conversacionId, titulo, nuevos = 1) {
+    setConversaciones((prev) => prev.map((c) => (
+      c.id === conversacionId && !c.tituloManual && graficosDe(c).length === nuevos ? { ...c, titulo } : c
+    )))
   }
 
   function nuevaConversacion() {
@@ -90,6 +99,7 @@ export function useConversaciones(usuario) {
     agregarMensaje,
     actualizarMensaje,
     renombrarConversacion,
+    titularConPrimerGrafico,
     nuevaConversacion,
     eliminarConversacion,
   }

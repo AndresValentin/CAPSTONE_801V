@@ -25,7 +25,9 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from pydantic import BaseModel, Field, ValidationError  # noqa: E402
 
 from . import analisis, catalogo, claves, db, powerbi, recuperacion, reporte_html, sesion  # noqa: E402
-from .consultas import aplicar_filtros_panel, construir_sql, normalizar_salida, rechazo_previo, validar_plan  # noqa: E402
+from .consultas import (  # noqa: E402
+    FORMATO_MES, aplicar_filtros_panel, construir_sql, normalizar_salida, rechazo_previo, validar_plan,
+)
 from .ia import ErrorIA, PlanConsulta, interpretar_con_ia  # noqa: E402
 
 app = FastAPI(title="BI Copilot API")
@@ -35,6 +37,7 @@ app.add_middleware(
     allow_origins=os.getenv("FRONTEND_ORIGIN", "http://localhost:5173").split(","),
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Authorization"],
+    expose_headers=["X-Graficos-Omitidos"],  # el navegador solo deja leer los encabezados listados
 )
 
 
@@ -152,11 +155,13 @@ def _ejecutar_plan(usuario: str, pregunta: str, plan: PlanConsulta, cat: catalog
         datos = {nombre: db.ejecutar(sql, params) for nombre, (sql, params) in consultas.items()}
     except pyodbc.Error as e:
         db.registrar_consulta(usuario, pregunta, "error", str(e), plan_dict, sql_log, uso, plan.dominio)
+        if db.es_tiempo_agotado(e):
+            raise _error_bd(e) from e
         raise HTTPException(status_code=500, detail="La consulta falló en la base de datos.") from e
     db.registrar_consulta(usuario, pregunta, "validado", plan=plan_dict, sql=sql_log, uso=uso, dominio=plan.dominio)
 
     total = datos["total"]["filas"][0]
-    serie = datos["serie"]["filas"] if "serie" in datos else []
+    serie = analisis.completar_meses(datos["serie"]["filas"] if "serie" in datos else [], plan, dominio)
     resultado = {
         "total": total["valor"] or 0,
         "cantidad": total["cantidad"],
@@ -186,6 +191,9 @@ def _ejecutar_plan(usuario: str, pregunta: str, plan: PlanConsulta, cat: catalog
 
 
 def _error_bd(e: Exception) -> HTTPException:
+    if db.es_tiempo_agotado(e):
+        return HTTPException(status_code=503, detail="La base de datos tardó demasiado en responder. "
+                                                     "Puede estar sin memoria: intenta de nuevo en un momento.")
     return HTTPException(status_code=503, detail="No hay conexión con la base de datos.")
 
 
@@ -274,6 +282,13 @@ def ver_catalogo(usuario: str = Depends(usuario_autenticado)):
                     for r in catalogo.RECOMENDACIONES.get(cod, ())
                     if r.metrica in d.medidas and r.agrupar_por in d.dimensiones()
                 ],
+                # Dashboard completo del área (POST /api/paquetes) y el mes que propone por defecto
+                "dashboard": {
+                    "nombre": catalogo.PAQUETES[cod].nombre,
+                    "paraQue": catalogo.PAQUETES[cod].para_que,
+                    "graficos": [{"titulo": g.titulo, "lectura": g.lectura} for g in catalogo.graficos_paquete(d, cod)],
+                    "mes": d.mes_recomendado(analisis.ultimo_mes_completo(d.rango_meses)),
+                } if cod in catalogo.PAQUETES and d.rango_meses and catalogo.graficos_paquete(d, cod) else None,
             }
             for cod, d in cat.disponibles.items() if cod in dominios_usuario
         ]
@@ -296,9 +311,90 @@ def consultar(solicitud: SolicitudConsulta, usuario: str = Depends(usuario_auten
         db.registrar_consulta(usuario, pregunta, "error", str(e))
         raise HTTPException(status_code=502, detail=str(e)) from e
 
+    if plan.accion == "dashboard":
+        return _armar_paquete(usuario, pregunta, plan.dominio, plan.desde or solicitud.panel.desde,
+                              plan.hasta or solicitud.panel.hasta, plan.filtros, cat, dominios_usuario, uso)
     if plan.accion == "consultar":
         plan = aplicar_filtros_panel(plan, cat, solicitud.panel.filtros, solicitud.panel.desde, solicitud.panel.hasta)
     return _ejecutar_plan(usuario, pregunta, plan, cat, dominios_usuario, uso)
+
+
+def _armar_paquete(usuario: str, pregunta: str, cod: str, desde: str, hasta: str, filtros: list,
+                   cat: catalogo.Catalogo, dominios_usuario: set[str], uso: dict | None) -> dict:
+    """Dashboard completo de un área para un período (catalogo.PAQUETES): cifras clave
+    contra el período anterior, tendencia de 12 meses y reparto por región, producto y
+    tipo. Cada gráfico pasa por la misma validación y traza que uno pedido en el chat."""
+    nombre = cat.dominios.get(cod, cod)
+    if cod not in dominios_usuario:
+        motivo = f"Acceso no autorizado al dominio {cod} ({nombre})."
+        db.registrar_consulta(usuario, pregunta, "rechazado", motivo, uso=uso, dominio=cod or None)
+        return {"estado": "rechazado", "motivo": motivo}
+    dominio = cat.disponibles.get(cod)
+    graficos = catalogo.graficos_paquete(dominio, cod) if dominio else []
+    if not graficos or not dominio.rango_meses:
+        return {"estado": "aclaracion", "motivo": f"Aún no hay un dashboard completo para {nombre}. Pídeme gráficos "
+                                                  "sueltos, por ejemplo uno de las recomendaciones de abajo."}
+    for valor in (desde, hasta):
+        if valor and not FORMATO_MES.match(valor):
+            return {"estado": "aclaracion", "motivo": f"No entendí el período «{valor}». Dime el mes, por ejemplo «abril 2026»."}
+
+    # Sin período: el último mes terminado con un volumen normal de registros
+    primero, ultimo = dominio.rango_meses
+    ultimo_completo = dominio.mes_recomendado(analisis.ultimo_mes_completo(dominio.rango_meses))
+    hasta = hasta or desde or ultimo_completo
+    desde = desde or hasta
+    if desde > hasta:
+        desde, hasta = hasta, desde
+    if hasta < primero or desde > ultimo:
+        return {"estado": "aclaracion",
+                "motivo": f"No hay datos de {nombre.lower()} entre {desde} y {hasta}: hay datos entre {primero} y {ultimo}. "
+                          f"Pídeme, por ejemplo, el dashboard de {nombre.lower()} de {ultimo_completo}."}
+
+    # Filtros mencionados (por ejemplo «en Valparaíso»): solo los que existen en el área
+    validos = [f for f in filtros if f.campo in dominio.atributos and f.valor in dominio.valores.get(f.campo, [])]
+    paquete = catalogo.PAQUETES[cod]
+    periodo = desde if desde == hasta else f"{desde} a {hasta}"
+    salida = []
+    for g in graficos:
+        plan = PlanConsulta(
+            accion="consultar", motivo_rechazo="", dominio=cod, titulo=g.titulo, metrica=g.metrica,
+            agrupar_por=g.agrupar_por, filtros=validos,
+            desde=analisis.sumar_meses(hasta, -11) if g.tendencia else desde, hasta=hasta,
+            tipo_salida=g.tipo, comparar=g.comparar,
+        )
+        try:
+            r = _ejecutar_plan(usuario, f"{pregunta} · {g.titulo}", plan, cat, dominios_usuario, None if salida else uso)
+        except HTTPException as e:
+            if e.status_code == 503:
+                raise  # la base no responde: no tiene sentido esperar por los demás gráficos
+            continue  # un gráfico que falla no bota el resto del dashboard
+        if r["estado"] == "validado":
+            salida.append({"titulo": g.titulo, "lectura": g.lectura, "plan": r["plan"],
+                           "interpretacion": r["interpretacion"], "resultado": r["resultado"]})
+    if not salida:
+        raise HTTPException(status_code=500, detail="No se pudo armar ningún gráfico del dashboard.")
+    filtro_texto = f" · {', '.join(f.valor for f in validos)}" if validos else ""
+    return {
+        "estado": "dashboard",
+        "dominio": cod,
+        "titulo": f"{paquete.nombre} · {periodo}{filtro_texto}",
+        "explicacion": paquete.para_que,
+        "periodo": periodo,
+        "graficos": salida,
+    }
+
+
+class SolicitudPaquete(BaseModel):
+    dominio: str = Field(min_length=1, max_length=10)
+    mes: str = Field(default="", max_length=7)  # AAAA-MM; vacío = último mes completo con datos
+
+
+@app.post("/api/paquetes")
+def armar_dashboard_recomendado(solicitud: SolicitudPaquete, usuario: str = Depends(usuario_autenticado)):
+    """Dashboard recomendado de un área, elegido desde la pantalla (sin pasar por la IA)."""
+    dominios_usuario, cat = _contexto_usuario(usuario)
+    return _armar_paquete(usuario, f"[dashboard recomendado] {solicitud.dominio} {solicitud.mes}".strip(),
+                          solicitud.dominio, solicitud.mes, solicitud.mes, [], cat, dominios_usuario, None)
 
 
 class GraficoExportar(BaseModel):
@@ -328,8 +424,21 @@ def _validar_graficos(graficos: list[GraficoExportar], usuario: str, verbo: str,
     return cat, validos
 
 
-def _graficos_a_exportar(solicitud: SolicitudExportacion, usuario: str) -> tuple[catalogo.Catalogo, list[tuple[str, PlanConsulta]]]:
-    return _validar_graficos(solicitud.graficos, usuario, "exportar")
+def _graficos_a_exportar(solicitud: SolicitudExportacion, usuario: str) -> tuple[catalogo.Catalogo, list[tuple[str, PlanConsulta]], int]:
+    """Como al guardar un dashboard: un gráfico viejo que ya no calza con el catálogo se
+    deja fuera (el encabezado X-Graficos-Omitidos dice cuántos) en vez de no exportar nada."""
+    dominios_usuario, cat = _contexto_usuario(usuario)
+    validos, motivos = [], []
+    for g in solicitud.graficos:
+        plan = normalizar_salida(g.plan.model_copy(update={"accion": "consultar"}))
+        motivo = validar_plan(plan, cat, dominios_usuario)
+        if motivo:
+            motivos.append(f"«{g.titulo}»: {motivo}")
+        else:
+            validos.append((g.titulo, plan))
+    if not validos:
+        raise HTTPException(status_code=400, detail=f"Ningún gráfico se puede exportar. {motivos[0]}")
+    return cat, validos, len(motivos)
 
 
 ORGANIZACION = os.getenv("ORGANIZACION", "Ruta Smart")
@@ -544,26 +653,28 @@ def mapa_chile(_usuario: str = Depends(usuario_autenticado)):
 @app.post("/api/reporte-html")
 def exportar_html(solicitud: SolicitudExportacion, usuario: str = Depends(usuario_autenticado)):
     """Un solo archivo .html interactivo con los gráficos pedidos en el chat."""
-    cat, graficos = _graficos_a_exportar(solicitud, usuario)
+    cat, graficos, omitidos = _graficos_a_exportar(solicitud, usuario)
     try:
         contenido = reporte_html.generar(solicitud.titulo, cat, graficos)
     except pyodbc.Error as e:
         db.registrar_consulta(usuario, "[html]", "error", str(e))
         raise HTTPException(status_code=500, detail="La consulta falló en la base de datos.") from e
     db.registrar_consulta(usuario, f"[html] {len(graficos)} gráficos del chat", "validado")
-    return Response(content=contenido, media_type="text/html; charset=utf-8")
+    return Response(content=contenido, media_type="text/html; charset=utf-8",
+                    headers={"X-Graficos-Omitidos": str(omitidos)})
 
 
 @app.post("/api/powerbi")
 def exportar_powerbi(solicitud: SolicitudExportacion, usuario: str = Depends(usuario_autenticado)):
     """Proyecto .pbip (en un .zip) con los gráficos pedidos en el chat."""
-    cat, graficos = _graficos_a_exportar(solicitud, usuario)
+    cat, graficos, omitidos = _graficos_a_exportar(solicitud, usuario)
     contenido = powerbi.generar_zip(cat, graficos, solicitud.titulo)
     db.registrar_consulta(usuario, f"[powerbi] {len(graficos)} gráficos del chat", "validado")
     return Response(
         content=contenido,
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="BI_Copilot_PowerBI.zip"'},
+        headers={"Content-Disposition": 'attachment; filename="BI_Copilot_PowerBI.zip"',
+                 "X-Graficos-Omitidos": str(omitidos)},
     )
 
 
@@ -734,14 +845,26 @@ def crear_dashboard(datos: DashboardNuevo, usuario: str = Depends(usuario_autent
     _rol(usuario, datos.carpeta, EDITAN, "guardar dashboards en ella")
     if not datos.nombre.strip():
         raise HTTPException(status_code=400, detail="Escribe un nombre para el dashboard.")
-    _, graficos = _validar_graficos(datos.graficos, usuario, "guardar")
+    # Un gráfico viejo del chat puede usar algo que ya no está en el catálogo: se guardan
+    # los demás y se avisa cuáles quedaron fuera, en vez de no guardar nada
+    dominios_usuario, cat = _contexto_usuario(usuario)
+    graficos, omitidos = [], []
+    for g in datos.graficos:
+        plan = normalizar_salida(g.plan.model_copy(update={"accion": "consultar"}))
+        motivo = validar_plan(plan, cat, dominios_usuario)
+        if motivo:
+            omitidos.append({"titulo": g.titulo, "motivo": motivo})
+        else:
+            graficos.append((g.titulo, plan))
+    if not graficos:
+        raise HTTPException(status_code=400, detail=f"Ningún gráfico se puede guardar. «{omitidos[0]['titulo']}»: {omitidos[0]['motivo']}")
     try:
         id_dashboard = db.crear_dashboard(usuario, datos.carpeta, datos.nombre.strip(), datos.descripcion.strip(),
                                           [(titulo, plan.model_dump_json()) for titulo, plan in graficos])
     except pyodbc.Error as e:
         raise _error_bd(e) from e
     db.registrar_consulta(usuario, f"[dashboard] crea {id_dashboard} en carpeta {datos.carpeta}", "validado")
-    return {"id": id_dashboard}
+    return {"id": id_dashboard, "omitidos": omitidos}
 
 
 @app.get("/api/dashboards/{id_dashboard}")
@@ -839,7 +962,7 @@ def guardar_permiso_dashboard(id_dashboard: int, datos: PermisoDashboard, usuari
 
 
 # --- Proyecciones -----------------------------------------------------------------
-# Módulo del menú lateral: regresión lineal sobre la serie mensual completa de una
+# Módulo del menú lateral: suavizamiento exponencial (Holt) sobre la serie mensual completa de una
 # métrica, calculada con los datos reales (analisis.proyectar).
 
 class SolicitudProyeccion(BaseModel):

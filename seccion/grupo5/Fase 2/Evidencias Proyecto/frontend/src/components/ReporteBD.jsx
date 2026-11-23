@@ -2,6 +2,7 @@ import { LayoutDashboard, Database, Hash } from 'lucide-react'
 import { GraficoPrincipal } from './DashboardPanel.jsx'
 import { VISUALIZACIONES } from '../data/mockData.js'
 import { formatCLP, formatMetrica } from '../lib/formato.js'
+import { tituloGrafico as tituloDelReporte } from '../lib/graficos.js'
 import './DashboardPanel.css'
 
 function formatCelda(valor, esMoneda) {
@@ -28,7 +29,7 @@ export default function ReporteBD({ reporte, actualizando = false, mostrarGrafic
     <section className={`dashboard-panel ${actualizando ? 'dashboard-panel-actualizando' : ''}`} aria-busy={actualizando}>
       <div className="panel-title-row">
         <div className="report-heading">
-          <h2><LayoutDashboard size={16} strokeWidth={2.4} /> {reporte.pregunta}</h2>
+          <h2><LayoutDashboard size={16} strokeWidth={2.4} /> {tituloDelReporte(reporte)}</h2>
           <p className="panel-subtitle">
             {i.dominio} · {i.metricaEtiqueta} · {i.dimensionEtiqueta} · {VISUALIZACIONES[i.visualizacion] ?? i.visualizacion} · {i.catalogoVersion}
           </p>

@@ -164,6 +164,94 @@
   white-space: nowrap;
 }
 
+/* Título editable del gráfico (TextoEditable): el lápiz aparece al pasar sobre la tarjeta */
+.reporte-grafico-cabecera .texto-editable {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: text;
+}
+
+.texto-editable-valor {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.texto-editable-lapiz {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 3px;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.reporte-grafico:hover .texto-editable-lapiz,
+.texto-editable-lapiz:focus-visible {
+  opacity: 1;
+}
+
+.texto-editable-lapiz:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+@media (hover: none) {
+  .texto-editable-lapiz {
+    opacity: 1;
+  }
+}
+
+.texto-editable-input {
+  width: 100%;
+  padding: 3px 7px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary);
+  border-radius: 6px;
+  outline: none;
+}
+
+/* Lo que dice el gráfico (lib/lectura.js) y, en un dashboard completo, qué pregunta responde */
+.reporte-lectura {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 9px 11px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-text);
+  background: var(--color-surface-2);
+  border-radius: 8px;
+}
+
+.reporte-lectura svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-warning);
+}
+
+.reporte-lectura p {
+  margin: 0;
+}
+
+.reporte-lectura-pregunta {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
 .reporte-grafico-cabecera p {
   margin: 2px 0 0;
   font-size: 11.5px;
@@ -198,6 +286,29 @@
 .reporte-grafico-activo {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+/* Si el centro queda angosto (por ejemplo, al agrandar el historial o el chat), los
+   gráficos pasan a una columna y los botones de exportar bajan, en vez de apretarse */
+@container centro (max-width: 720px) {
+  .reporte-grilla {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reporte-grafico-mapa {
+    grid-row: auto;
+  }
+
+  .reporte-barra {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reporte-exportar,
+  .reporte-exportar-botones {
+    align-items: stretch;
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 640px) {

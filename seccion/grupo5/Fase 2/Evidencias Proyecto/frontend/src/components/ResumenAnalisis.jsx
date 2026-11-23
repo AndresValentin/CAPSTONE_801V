@@ -15,9 +15,13 @@ function Avisos({ textos }) {
   )
 }
 
-function Comparacion({ c, fmt }) {
+function Comparacion({ c, fmt, soloAvisos }) {
   if (c.omitida) {
     return <p className="analisis-omitida"><Info size={13} /> {c.omitida}</p>
+  }
+  // En un KPI la variación ya se ve grande en la tarjeta: aquí solo van los avisos
+  if (soloAvisos) {
+    return c.advertencias?.length ? <div className="analisis-bloque"><Avisos textos={c.advertencias} /></div> : null
   }
   const sentido = sentidoVariacion(c.variacion, c.mejorSiBaja)
   return (
@@ -37,14 +41,15 @@ function Proyeccion({ p, fmt }) {
     return <p className="analisis-omitida"><Info size={13} /> {p.omitida}</p>
   }
   const [siguiente, ...resto] = p.meses
-  const r2 = p.r2.toLocaleString('es-CL', { maximumFractionDigits: 2 })
+  // Los gráficos guardados antes del cambio de método traen `pendiente` y `r2`
+  const tendencia = p.tendencia ?? p.pendiente ?? 0
   const avisos = [
-    ...p.anomalias.map((a) => `Mes atípico: ${a.mes} registró ${fmt(a.valor)} y la tendencia esperaba ${fmt(a.esperado)}.`),
+    ...p.anomalias.map((a) => `Mes atípico: ${a.mes} registró ${fmt(a.valor)} y se esperaba ${fmt(a.esperado)}.`),
     ...p.notas,
   ]
   return (
     <div className="analisis-bloque">
-      <p className="analisis-titulo"><TrendingUp size={13} /> Proyección por regresión lineal</p>
+      <p className="analisis-titulo"><TrendingUp size={13} /> Proyección · {p.metodo ?? 'Regresión lineal'}</p>
       <p className="analisis-linea">
         {siguiente.mes}: <strong>{fmt(siguiente.valor)}</strong>
         <span className="analisis-rango"> (entre {fmt(siguiente.min)} y {fmt(siguiente.max)})</span>
@@ -53,7 +58,9 @@ function Proyeccion({ p, fmt }) {
         <p className="analisis-secundario">{resto.map((m) => `${m.mes}: ${fmt(m.valor)}`).join(' · ')}</p>
       )}
       <p className="analisis-secundario">
-        Tendencia {p.pendiente >= 0 ? '+' : ''}{fmt(p.pendiente)} por mes · R² {r2} · {p.base.meses} meses ({p.base.desde} a {p.base.hasta})
+        Tendencia {tendencia >= 0 ? '+' : ''}{fmt(tendencia)} por mes
+        {p.error != null && ` · error típico ±${fmt(p.error)}`}
+        {' '}· entrenada con {p.base.meses} meses ({p.base.desde} a {p.base.hasta})
       </p>
       <Avisos textos={avisos} />
     </div>
@@ -62,14 +69,15 @@ function Proyeccion({ p, fmt }) {
 
 // Explica en palabras la comparación y la proyección que calculó el backend.
 // Si alguna no corresponde (por ejemplo, comparar la reserva), muestra el motivo.
-export default function ResumenAnalisis({ resultado, esMoneda }) {
+export default function ResumenAnalisis({ resultado, esMoneda, soloAvisos = false }) {
   const c = resultado?.comparacion
   const p = resultado?.proyeccion
   if (!c && !p) return null
+  if (soloAvisos && !p && c && !c.omitida && !c.advertencias?.length) return null
   const fmt = (v) => formatMetrica(v, esMoneda)
   return (
     <div className="analisis">
-      {c && <Comparacion c={c} fmt={fmt} />}
+      {c && <Comparacion c={c} fmt={fmt} soloAvisos={soloAvisos} />}
       {p && <Proyeccion p={p} fmt={fmt} />}
     </div>
   )

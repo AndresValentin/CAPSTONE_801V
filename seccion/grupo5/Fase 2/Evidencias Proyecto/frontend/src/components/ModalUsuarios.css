@@ -20,7 +20,8 @@
   margin: 0;
 }
 
-.modal-usuarios .usuarios-cerrar {
+/* Vale para todos los modales con esta cabecera (usuarios, miembros, permisos) */
+.usuarios-cabecera .usuarios-cerrar {
   position: static;
   flex-shrink: 0;
 }

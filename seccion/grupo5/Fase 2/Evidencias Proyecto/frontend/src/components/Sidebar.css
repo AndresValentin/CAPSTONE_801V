@@ -4,7 +4,9 @@
   position: sticky;
   top: var(--header-h);
   height: calc(100vh - var(--header-h));
-  width: 272px;
+  /* Ajustable con el borde derecho (AsaRedimensionar); el tope en vw evita que tape
+     el centro si la ventana se achica después de agrandarlo */
+  width: min(var(--ancho-sidebar, 272px), 34vw);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -284,6 +286,7 @@
     position: fixed;
     left: 0;
     z-index: 20;
+    width: min(var(--ancho-sidebar, 272px), 85vw);
     box-shadow: var(--shadow-md);
   }
 }

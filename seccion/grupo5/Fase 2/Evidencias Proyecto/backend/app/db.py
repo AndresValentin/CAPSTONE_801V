@@ -22,6 +22,9 @@ USUARIO = os.getenv("DB_USER", "")  # vacío = autenticación de Windows
 CLAVE = os.getenv("DB_PASSWORD", "")
 LECTOR = os.getenv("DB_USUARIO_LECTOR", "bi_lector")  # vacío = no impersonar
 TIEMPO_CONEXION = int(os.getenv("DB_TIMEOUT", "5"))  # en Azure SQL, más alto: la base puede estar pausada
+# Tope por consulta: si SQL Server se queda sin memoria, la pantalla recibe un error claro
+# en vez de esperar para siempre
+TIEMPO_CONSULTA = int(os.getenv("DB_TIMEOUT_CONSULTA", "60"))
 
 if LECTOR and not re.fullmatch(r"\w+", LECTOR):
     raise ValueError("DB_USUARIO_LECTOR solo puede tener letras, números y _")
@@ -30,7 +33,14 @@ if LECTOR and not re.fullmatch(r"\w+", LECTOR):
 def _conectar() -> pyodbc.Connection:
     partes = [f"DRIVER={{{DRIVER}}}", f"SERVER={SERVIDOR}", f"DATABASE={BASE}", "TrustServerCertificate=yes"]
     partes += [f"UID={USUARIO}", f"PWD={CLAVE}"] if USUARIO else ["Trusted_Connection=yes"]
-    return pyodbc.connect(";".join(partes), timeout=TIEMPO_CONEXION)
+    con = pyodbc.connect(";".join(partes), timeout=TIEMPO_CONEXION)
+    con.timeout = TIEMPO_CONSULTA
+    return con
+
+
+def es_tiempo_agotado(e: Exception) -> bool:
+    """La consulta o el inicio de sesión superó el tiempo máximo (SQLSTATE HYT00/HYT01)."""
+    return any(codigo in str(e) for codigo in ("HYT00", "HYT01"))
 
 
 def _consultar(sql: str, params: tuple = ()) -> list[tuple]:
@@ -620,6 +630,11 @@ def columnas_disponibles(schema: str, tabla: str) -> dict[str, str]:
 # origen y columna vienen de las constantes de catalogo.py, nunca del usuario
 def valores_distintos(origen: str, columna: str) -> list[str]:
     return [fila[0] for fila in _consultar(f"SELECT DISTINCT {columna} FROM {origen} ORDER BY {columna}")]
+
+
+def registros_por_mes(origen: str, columna: str) -> dict[str, int]:
+    mes = f"CONVERT(CHAR(7), {columna}, 120)"
+    return {f[0]: f[1] for f in _consultar(f"SELECT {mes}, COUNT(*) FROM {origen} WHERE {columna} IS NOT NULL GROUP BY {mes}")}
 
 
 def rango_meses(origen: str, columna: str) -> tuple[str, str] | None:

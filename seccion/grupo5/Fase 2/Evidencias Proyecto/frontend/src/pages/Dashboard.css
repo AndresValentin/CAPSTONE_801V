@@ -105,12 +105,15 @@
   align-items: flex-start;
 }
 
+/* Centro | asa | chat. La columna del asa mide 0 y las dos separaciones de 10px suman
+   los 20px de siempre. El ancho del chat se ajusta arrastrando el asa. */
 .workspace {
   flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 0 min(var(--ancho-chat, 360px), 42vw);
+  column-gap: 10px;
+  row-gap: 20px;
   padding: 20px 24px 32px;
   align-items: start;
 }
@@ -119,10 +122,67 @@
   display: none;
 }
 
+/* Los gráficos se reacomodan según el ancho real del centro (ver ReporteGraficos.css) */
 .main-column {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  container: centro / inline-size;
+}
+
+.aviso-conexion {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  color: var(--color-text);
+  background: var(--color-danger-soft);
+  border-radius: 8px;
+}
+
+/* Bordes para ajustar el ancho del historial y del chat (AsaRedimensionar) */
+.asa-redimensionar {
+  position: sticky;
+  z-index: 6;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.asa-historial {
+  top: var(--header-h);
+  height: calc(100vh - var(--header-h));
+  margin: 0 -6px;
+}
+
+.asa-chat {
+  top: calc(var(--header-h) + 20px);
+  height: calc(100vh - var(--header-h) - 40px);
+  margin: 0 -6px;
+}
+
+.asa-redimensionar-linea {
+  width: 3px;
+  height: 100%;
+  border-radius: 3px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.asa-redimensionar:hover .asa-redimensionar-linea,
+.asa-redimensionar:focus-visible .asa-redimensionar-linea,
+.asa-redimensionar:active .asa-redimensionar-linea {
+  background: var(--color-primary);
+}
+
+/* Mientras se arrastra: el cursor no cambia al pasar sobre otros elementos y no se selecciona texto */
+body.redimensionando,
+body.redimensionando * {
+  cursor: col-resize !important;
+  user-select: none;
 }
 
 .panel-title-row {
@@ -146,6 +206,11 @@
 @media (max-width: 1200px) {
   .workspace {
     grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
+  }
+  /* El chat va debajo del reporte: su ancho no se ajusta */
+  .asa-chat {
+    display: none;
   }
   .chat-copilot {
     position: relative;
@@ -155,6 +220,10 @@
 }
 
 @media (max-width: 900px) {
+  /* El historial se superpone como panel deslizable */
+  .asa-historial {
+    display: none;
+  }
   .sidebar-backdrop {
     display: block;
     position: fixed;

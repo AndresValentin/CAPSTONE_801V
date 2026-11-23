@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Bot, SendHorizontal, ShieldAlert, Paperclip, FileSpreadsheet, LayoutDashboard,
-  SquarePen, AlertTriangle, CheckCircle2, Sparkles,
+  SquarePen, AlertTriangle, CheckCircle2, Sparkles, CircleHelp,
 } from 'lucide-react'
 import { EXTENSIONES_ACEPTADAS } from '../lib/importacion.js'
 import { METRICAS, DIMENSIONES, VISUALIZACIONES, completarReporte } from '../data/mockData.js'
 import { reportesDe } from '../hooks/useConversaciones.js'
 import { OPCIONES_COMPARAR } from '../lib/analisis.js'
+import { nombreMes } from '../lib/formato.js'
 import './ChatCopilot.css'
 
 const SUGERENCIAS = [
@@ -80,10 +81,28 @@ function detalleReporte(interpretacion) {
   ]
 }
 
-function MensajeAsistente({ m, sugerencias, reporteActivoId, onVerReporte, onResponder }) {
+function MensajeAsistente({ m, partes, sugerencias, reporteActivoId, onVerReporte, onResponder }) {
   return (
     <>
       <p className="chat-text">{m.texto}</p>
+
+      {/* Dashboard completo: sus gráficos se listan aquí en vez de una tarjeta por cada uno */}
+      {m.tipo === 'dashboard' && (
+        <ul className="chat-dashboard">
+          {partes.map((p) => (
+            <li key={p.id}>
+              <button
+                type="button"
+                className={`report-link ${reporteActivoId === p.id ? 'report-link-active' : ''}`}
+                title={p.lectura}
+                onClick={() => onVerReporte(p)}
+              >
+                <LayoutDashboard size={12} /> {p.titulo}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {m.tipo === 'aclaracion' && (
         <div className="quick-replies">
@@ -130,11 +149,61 @@ function MensajeAsistente({ m, sugerencias, reporteActivoId, onVerReporte, onRes
   )
 }
 
+// Bienvenida con backend: pocas palabras y buenas recomendaciones. Un dashboard completo
+// por área (se arma sin IA) y los gráficos que más información dan, con su para qué al
+// pasar el mouse.
+function Recomendaciones({ catalogo, areaActiva, onArmarDashboard, onEnviar, onAbrirGuia }) {
+  const areas = catalogo.dominios
+  const delArea = areas.find((d) => d.codigo === areaActiva)
+  const graficos = delArea
+    ? delArea.recomendaciones.slice(0, 4)
+    : areas.map((d) => d.recomendaciones[0]).filter(Boolean)
+  return (
+    <div className="chat-welcome">
+      <span className="chat-welcome-icon"><Sparkles size={20} /></span>
+      <h3>¿Qué quieres ver?</h3>
+      <p>Elige una recomendación o escríbela con tus palabras.</p>
+
+      <p className="chat-reco-titulo">Dashboards completos</p>
+      <div className="chat-suggestions">
+        {areas.filter((d) => d.dashboard).map((d) => (
+          <button
+            key={d.codigo}
+            type="button"
+            className="suggestion-chip suggestion-chip-destacada"
+            title={d.dashboard.paraQue}
+            onClick={() => onArmarDashboard(d.codigo, d.dashboard.mes)}
+          >
+            <LayoutDashboard size={12} /> {d.dashboard.nombre} · {nombreMes(d.dashboard.mes)}
+          </button>
+        ))}
+      </div>
+
+      <p className="chat-reco-titulo">Gráficos con buena información</p>
+      <div className="chat-suggestions">
+        {graficos.map((r) => (
+          <button key={r.pregunta} type="button" className="suggestion-chip" title={r.motivo} onClick={() => onEnviar(r.pregunta)}>
+            {r.pregunta}
+          </button>
+        ))}
+      </div>
+
+      {onAbrirGuia && (
+        <button type="button" className="link-btn chat-guia-link" onClick={onAbrirGuia}>
+          <CircleHelp size={13} /> Cómo pedir un buen reporte
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function ChatCopilot({
   conversacion, catalogo, pensando, reporteActivoId, areaActiva, onEnviar, onAdjuntar, onVerReporte, onNuevoChat,
+  onAbrirGuia, onArmarDashboard,
 }) {
   const guia = guiaDesdeCatalogo(catalogo)
   const sugerencias = sugerenciasDesdeCatalogo(catalogo, areaActiva)
+  const conRecomendaciones = Boolean(catalogo?.dominios?.length && onArmarDashboard)
   const [texto, setTexto] = useState('')
   const [arrastrando, setArrastrando] = useState(false)
   const listRef = useRef(null)
@@ -178,14 +247,32 @@ export default function ChatCopilot({
     >
       <div className="panel-title-row">
         <h2><Bot size={16} strokeWidth={2.4} /> BI Copilot</h2>
-        <button type="button" className="icon-btn" title="Nuevo reporte" onClick={onNuevoChat}>
-          <SquarePen size={15} />
-        </button>
+        <div className="chat-acciones">
+          {onAbrirGuia && (
+            <button type="button" className="icon-btn" title="Cómo pedir un buen reporte" aria-label="Cómo pedir un buen reporte" onClick={onAbrirGuia}>
+              <CircleHelp size={15} />
+            </button>
+          )}
+          <button type="button" className="icon-btn" title="Nuevo reporte" aria-label="Nuevo reporte" onClick={onNuevoChat}>
+            <SquarePen size={15} />
+          </button>
+        </div>
       </div>
       <p className="panel-subtitle chat-title">{conversacion.titulo}</p>
 
       <div className="chat-messages" ref={listRef}>
-        {vacio && (
+        {vacio && conRecomendaciones && (
+          <Recomendaciones
+            catalogo={catalogo}
+            areaActiva={areaActiva}
+            onArmarDashboard={onArmarDashboard}
+            onEnviar={enviar}
+            onAbrirGuia={onAbrirGuia}
+          />
+        )}
+
+        {/* Modo demo (sin backend): guía y sugerencias de los datos de ejemplo */}
+        {vacio && !conRecomendaciones && (
           <div className="chat-welcome">
             <span className="chat-welcome-icon"><Sparkles size={20} /></span>
             <h3>¿Qué reporte necesitas?</h3>
@@ -203,7 +290,7 @@ export default function ChatCopilot({
           </div>
         )}
 
-        {mensajes.map((m) => (
+        {mensajes.filter((m) => !m.grupo).map((m) => (
           <div key={m.id} className={`chat-bubble chat-${m.rol} ${m.tipo === 'error' ? 'chat-error' : ''}`}>
             {m.rol === 'usuario' && m.tipo === 'archivo' && (
               <span className="file-chip"><FileSpreadsheet size={14} /> {m.texto}</span>
@@ -212,6 +299,7 @@ export default function ChatCopilot({
             {m.rol === 'asistente' && (
               <MensajeAsistente
                 m={m}
+                partes={m.tipo === 'dashboard' ? mensajes.filter((p) => p.grupo === m.id) : []}
                 sugerencias={sugerencias}
                 reporteActivoId={reporteActivoId}
                 onVerReporte={onVerReporte}
@@ -265,7 +353,7 @@ export default function ChatCopilot({
         <input
           type="text"
           maxLength={500}
-          placeholder="Ej: genera un reporte del monto pagado por región"
+          placeholder="Ej: dashboard de siniestros de abril, o monto pagado por región"
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
         />
