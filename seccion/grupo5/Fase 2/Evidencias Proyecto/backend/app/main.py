@@ -13,6 +13,8 @@ llamar a la IA (cambiar un filtro en el panel no gasta tokens).
 import hashlib
 import os
 import secrets
+import threading
+from contextlib import asynccontextmanager
 from typing import Literal
 
 from dotenv import load_dotenv
@@ -30,7 +32,15 @@ from .consultas import (  # noqa: E402
 )
 from .ia import ErrorIA, PlanConsulta, interpretar_con_ia  # noqa: E402
 
-app = FastAPI(title="RootSmart API")
+@asynccontextmanager
+async def _al_iniciar(_app: FastAPI):
+    # El catálogo se carga apenas parte el backend, en segundo plano: así la primera
+    # pregunta no espera esa carga (con la BD fría puede tardar casi un minuto)
+    threading.Thread(target=catalogo.precargar, daemon=True).start()
+    yield
+
+
+app = FastAPI(title="RootSmart API", lifespan=_al_iniciar)
 
 app.add_middleware(
     CORSMiddleware,

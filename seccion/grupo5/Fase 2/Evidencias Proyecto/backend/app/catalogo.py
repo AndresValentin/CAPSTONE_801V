@@ -11,6 +11,7 @@ Hay dos partes:
   ella desaparece del catálogo. Los valores de los filtros salen de la BD.
 """
 
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -573,24 +574,46 @@ def ampliar_permisos(dominios_usuario: set[str]) -> set[str]:
 
 
 _cache: tuple[float, Catalogo] | None = None
+# Una sola carga a la vez: la primera la esperan todos; las recargas van en segundo plano
+_cargando = threading.Lock()
 
 
 def obtener() -> Catalogo:
     """Catálogo vigente. Se recarga cada pocos minutos, así un cambio en meta.*
-    se refleja sin reiniciar el backend."""
+    se refleja sin reiniciar el backend. La recarga corre en segundo plano y mientras
+    tanto se entrega el catálogo anterior: con SQL Server corto de memoria, recargarlo
+    tomaba cerca de un minuto y lo esperaba quien justo estaba preguntando."""
     global _cache
-    if _cache is None or time.monotonic() - _cache[0] > _DURACION_CACHE:
-        try:
-            nuevo = _cargar()
-        except pyodbc.Error:
+    if _cache is None:
+        with _cargando:
             if _cache is None:
-                raise
-            # Si la BD falla al recargar, se sigue con el catálogo anterior y se
-            # reintenta en un minuto, en vez de botar todas las consultas
-            print("[catalogo] no se pudo recargar; se usa el anterior", flush=True)
-            _cache = (time.monotonic() - _DURACION_CACHE + 60, _cache[1])
-            return _cache[1]
-        # La hora se toma al terminar: con una BD lenta, la carga podía durar más que
-        # el propio caché y el catálogo nacía vencido
-        _cache = (time.monotonic(), nuevo)
+                nuevo = _cargar()
+                # La hora se toma al terminar: con una BD lenta, la carga podía durar más que
+                # el propio caché y el catálogo nacía vencido
+                _cache = (time.monotonic(), nuevo)
+        return _cache[1]
+    if time.monotonic() - _cache[0] > _DURACION_CACHE and _cargando.acquire(blocking=False):
+        threading.Thread(target=_recargar, daemon=True).start()
     return _cache[1]
+
+
+def _recargar() -> None:
+    global _cache
+    try:
+        nuevo = _cargar()
+        _cache = (time.monotonic(), nuevo)
+    except Exception:  # noqa: BLE001 - un hilo en segundo plano no debe morir con el error
+        # Si la BD falla al recargar, se sigue con el catálogo anterior y se
+        # reintenta en un minuto, en vez de botar todas las consultas
+        print("[catalogo] no se pudo recargar; se usa el anterior", flush=True)
+        _cache = (time.monotonic() - _DURACION_CACHE + 60, _cache[1])
+    finally:
+        _cargando.release()
+
+
+def precargar() -> None:
+    """Al arrancar el backend: deja el catálogo listo antes de la primera pregunta."""
+    try:
+        obtener()
+    except pyodbc.Error:
+        print("[catalogo] no se pudo precargar; se cargará con la primera consulta", flush=True)
