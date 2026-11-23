@@ -241,7 +241,7 @@ export function obtenerMapaChile() {
 
 // Descarga el reporte. `formato` = 'html'; `graficos` = [{ titulo, plan }].
 const EXPORTACIONES = {
-  html: { ruta: '/api/reporte-html', archivo: 'Reporte_BI_Copilot.html' },
+  html: { ruta: '/api/reporte-html', archivo: 'Reporte_RootSmart.html' },
 }
 
 export async function descargarReporte(formato, titulo, graficos) {

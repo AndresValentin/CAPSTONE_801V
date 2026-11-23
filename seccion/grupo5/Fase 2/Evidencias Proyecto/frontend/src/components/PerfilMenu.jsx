@@ -104,7 +104,7 @@ export default function PerfilMenu({ sesion, onSalir }) {
         </span>
         <span className="perfil-texto">
           <strong>{nombre}</strong>
-          <span>{rol || (perfil?.organizacion ?? 'BI Copilot')}</span>
+          <span>{rol || (perfil?.organizacion ?? 'RootSmart')}</span>
         </span>
         <ChevronUp size={15} />
       </button>

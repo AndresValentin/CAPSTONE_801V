@@ -39,12 +39,12 @@ def _enviar_correo(destino: str, nombre: str, enlace: str) -> None:
 
     usuario = os.getenv("SMTP_USER", "")
     mensaje = EmailMessage()
-    mensaje["Subject"] = "Cambia tu contraseña de BI Copilot"
+    mensaje["Subject"] = "Cambia tu contraseña de RootSmart"
     mensaje["From"] = os.getenv("SMTP_FROM") or usuario
     mensaje["To"] = destino
     mensaje.set_content(
         f"Hola, {nombre}:\n\n"
-        f"Para cambiar tu contraseña de BI Copilot entra a este enlace:\n\n{enlace}\n\n"
+        f"Para cambiar tu contraseña de RootSmart entra a este enlace:\n\n{enlace}\n\n"
         f"El enlace funciona una sola vez y vence en {VIGENCIA_MINUTOS} minutos.\n"
         "Si no lo pediste, ignora este correo: tu contraseña no cambiará.\n"
     )

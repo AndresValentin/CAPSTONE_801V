@@ -549,7 +549,7 @@ export default function Dashboard() {
             <PanelLeft size={17} />
           </button>
           <span className="brand-mark"><Sparkles size={15} strokeWidth={2.4} /></span>
-          <span className="brand-name">BI Copilot</span>
+          <span className="brand-name">RootSmart</span>
         </div>
         <div className="header-meta">
           <span className="domain-pill">

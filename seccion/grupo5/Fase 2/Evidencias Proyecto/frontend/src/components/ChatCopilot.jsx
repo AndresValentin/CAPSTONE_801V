@@ -246,7 +246,7 @@ export default function ChatCopilot({
       onDrop={handleDrop}
     >
       <div className="panel-title-row">
-        <h2><Bot size={16} strokeWidth={2.4} /> BI Copilot</h2>
+        <h2><Bot size={16} strokeWidth={2.4} /> RootSmart</h2>
         <div className="chat-acciones">
           {onAbrirGuia && (
             <button type="button" className="icon-btn" title="Cómo pedir un buen reporte" aria-label="Cómo pedir un buen reporte" onClick={onAbrirGuia}>

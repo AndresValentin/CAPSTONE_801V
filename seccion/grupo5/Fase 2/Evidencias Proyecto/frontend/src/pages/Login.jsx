@@ -76,7 +76,7 @@ export default function Login({ recuperar = false }) {
         <div className="login-panel-inner">
           <div className="brand">
             <span className="brand-mark"><Sparkles size={15} strokeWidth={2.4} /></span>
-            <span className="brand-name">BI Copilot</span>
+            <span className="brand-name">RootSmart</span>
           </div>
 
           <h1>Bienvenido de vuelta</h1>
@@ -138,9 +138,9 @@ export default function Login({ recuperar = false }) {
         <div className="visual-glow" />
         <div className="visual-content">
           <div className="visual-badge"><Sparkles size={13} /> Inteligencia de negocios con IA</div>
-          <h2>Pregunta en español.<br />Decide con datos.</h2>
+          <h2>Arma dashboards fácilmente.<br />Decide con datos.</h2>
           <p>
-            BI Copilot convierte tus preguntas en gráficos, mapas y reportes
+            RootSmart convierte tus preguntas en gráficos, mapas y reportes
             listos para presentar, en segundos.
           </p>
 

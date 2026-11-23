@@ -14,9 +14,9 @@ from dataclasses import dataclass, field
 from . import catalogo, db
 from .ia import PlanConsulta
 
-NOMBRE = "BI_Copilot"
+NOMBRE = "RootSmart"
 ESQUEMAS = "https://developer.microsoft.com/json-schemas/fabric/item"
-TEMA = "BICopilot"
+TEMA = "RootSmart"
 MONEDA = '"$"#,0'
 ENTERO = "#,0"
 ANULACION = 'IF(Prima[Tipo de movimiento] = "ANULACION", -Prima[{c}], Prima[{c}])'
@@ -548,10 +548,10 @@ def generar_zip(cat: catalogo.Catalogo, graficos: list[tuple[str, PlanConsulta]]
     return salida.getvalue()
 
 
-LEEME = """BI Copilot - proyecto de Power BI
+LEEME = """RootSmart - proyecto de Power BI
 
 1. Descomprime TODA la carpeta (no abras el archivo desde dentro del .zip).
-2. Abre BI_Copilot.pbip con Power BI Desktop.
+2. Abre RootSmart.pbip con Power BI Desktop.
 3. Si te pide credenciales de SQL Server, elige "Windows" y "Usar mis credenciales actuales".
    Si advierte que la conexion no esta cifrada, acepta para continuar en el servidor local.
 4. Presiona "Actualizar" en la cinta de Inicio para cargar los datos.

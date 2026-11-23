@@ -246,10 +246,10 @@ export default function Proyecciones() {
       <header className="dashboard-header">
         <div className="brand">
           <span className="brand-mark"><Sparkles size={15} strokeWidth={2.4} /></span>
-          <span className="brand-name">BI Copilot · Proyecciones</span>
+          <span className="brand-name">RootSmart · Proyecciones</span>
         </div>
         <div className="header-meta">
-          <Link className="btn-cabecera" to="/dashboard"><ArrowLeft size={14} /> Volver al copiloto</Link>
+          <Link className="btn-cabecera" to="/dashboard"><ArrowLeft size={14} /> Volver al asistente</Link>
         </div>
       </header>
 

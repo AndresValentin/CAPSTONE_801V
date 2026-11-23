@@ -1,4 +1,4 @@
-"""API de BI Copilot.
+"""API de RootSmart.
 
 Flujo de POST /api/consultas:
   usuario + pregunta + filtros del panel -> permisos del usuario (seguridad.*)
@@ -30,7 +30,7 @@ from .consultas import (  # noqa: E402
 )
 from .ia import ErrorIA, PlanConsulta, interpretar_con_ia  # noqa: E402
 
-app = FastAPI(title="BI Copilot API")
+app = FastAPI(title="RootSmart API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -403,7 +403,7 @@ class GraficoExportar(BaseModel):
 
 
 class SolicitudExportacion(BaseModel):
-    titulo: str = Field(default="Reporte BI Copilot", min_length=1, max_length=200)
+    titulo: str = Field(default="Reporte RootSmart", min_length=1, max_length=200)
     graficos: list[GraficoExportar] = Field(min_length=1, max_length=30)
 
 
@@ -673,7 +673,7 @@ def exportar_powerbi(solicitud: SolicitudExportacion, usuario: str = Depends(usu
     return Response(
         content=contenido,
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="BI_Copilot_PowerBI.zip"',
+        headers={"Content-Disposition": 'attachment; filename="RootSmart_PowerBI.zip"',
                  "X-Graficos-Omitidos": str(omitidos)},
     )
 

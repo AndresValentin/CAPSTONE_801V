@@ -1,4 +1,4 @@
-# BI Copilot
+# RootSmart
 
 **Proyecto Capstone — Ingeniería en Informática**
 
@@ -7,7 +7,7 @@
 
 ## Descripción del proyecto
 
-BI Copilot es una aplicación de inteligencia de negocios que busca facilitar el análisis de información mediante consultas realizadas en lenguaje natural.
+RootSmart es una aplicación de inteligencia de negocios que busca facilitar el análisis de información mediante consultas realizadas en lenguaje natural.
 
 La solución utiliza inteligencia artificial para interpretar las preguntas de los usuarios y transformarlas en planes estructurados, que posteriormente son validados antes de generar consultas SQL controladas.
 

@@ -161,11 +161,11 @@ export default function VistaDashboard() {
       <header className="dashboard-header">
         <div className="brand">
           <span className="brand-mark"><Sparkles size={15} strokeWidth={2.4} /></span>
-          <span className="brand-name">BI Copilot · Dashboards</span>
+          <span className="brand-name">RootSmart · Dashboards</span>
         </div>
         <div className="header-meta">
           <Link className="btn-cabecera" to="/dashboards"><ArrowLeft size={14} /> Carpetas</Link>
-          <Link className="btn-cabecera" to="/dashboard">Copiloto</Link>
+          <Link className="btn-cabecera" to="/dashboard">Asistente</Link>
         </div>
       </header>
 

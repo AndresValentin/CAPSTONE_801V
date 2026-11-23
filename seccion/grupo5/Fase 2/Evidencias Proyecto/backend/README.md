@@ -1,4 +1,4 @@
-# BI Copilot — Backend (Python + FastAPI + Claude)
+# RootSmart — Backend (Python + FastAPI + Claude)
 
 ## El flujo, paso a paso
 
@@ -94,7 +94,7 @@ La pantalla muestra la conclusión en una frase (a la baja, al alza o estable), 
 
 Un dashboard guarda los **planes** de sus gráficos, no los datos. Al abrirlo, el backend vuelve a ejecutar cada plan con los permisos de quien lo mira: si un gráfico es de un área que esa persona no puede consultar, se muestra bloqueado. Las carpetas funcionan como repositorios: el propietario agrega miembros como lector o editor, y `NUM_VERSION` evita que dos editores se pisen los cambios.
 
-En el copiloto, el módulo **Carpetas y compartidos** del menú lateral muestra las carpetas propias y las compartidas con el usuario, con sus dashboards a un clic; desde ahí también se crea una carpeta o se comparte. Cada gráfico guarda su título (editable con el lápiz o con doble clic; vacío vuelve al automático, por ejemplo «Monto pagado por región»). Si un gráfico viejo del chat ya no calza con el catálogo, al guardar o exportar se deja fuera y se avisa.
+En el asistente, el módulo **Carpetas y compartidos** del menú lateral muestra las carpetas propias y las compartidas con el usuario, con sus dashboards a un clic; desde ahí también se crea una carpeta o se comparte. Cada gráfico guarda su título (editable con el lápiz o con doble clic; vacío vuelve al automático, por ejemplo «Monto pagado por región»). Si un gráfico viejo del chat ya no calza con el catálogo, al guardar o exportar se deja fuera y se avisa.
 
 El propietario también puede dar a un miembro un rol distinto en un dashboard puntual (botón **Permisos** del dashboard): por ejemplo, un lector de la carpeta que edita solo "Siniestros Q4". Quitar a alguien de la carpeta borra esas excepciones.
 
