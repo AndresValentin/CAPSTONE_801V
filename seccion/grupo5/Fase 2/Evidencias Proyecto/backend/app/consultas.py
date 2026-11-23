@@ -15,7 +15,8 @@ OPERACION_ESCRITURA = re.compile(
     r"|elimina|eliminar|borra|borrar|modifica|modificar|actualiza|actualizar|inserta|insertar)\b",
     re.IGNORECASE,
 )
-FORMATO_MES = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+# Años 1900-2099: "0000-01" pasaba el formato y date(0, 1, 1) terminaba en un error 500
+FORMATO_MES = re.compile(r"^(19|20)\d{2}-(0[1-9]|1[0-2])$")
 LIMITE_FILAS = 500
 LIMITE_DETALLE = 50
 
@@ -45,6 +46,10 @@ def validar_plan(plan: PlanConsulta, cat: catalogo.Catalogo, dominios_usuario: s
         return f"RF-03: la métrica '{plan.metrica}' no está en el catálogo de {nombre}."
     if plan.agrupar_por not in dominio.dimensiones():
         return f"RF-03: no se puede agrupar por '{plan.agrupar_por}' en {nombre}."
+    if plan.tipo_salida not in catalogo.TIPOS_SALIDA:
+        return f"El tipo de gráfico '{plan.tipo_salida}' no es válido."
+    if len({f.campo for f in plan.filtros}) < len(plan.filtros):
+        return "Hay dos filtros sobre el mismo campo: elige un solo valor por campo."
 
     for f in plan.filtros:
         if f.campo not in dominio.atributos:

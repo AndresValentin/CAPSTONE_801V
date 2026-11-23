@@ -13,6 +13,7 @@ llamar a la IA (cambiar un filtro en el panel no gasta tokens).
 import hashlib
 import os
 import secrets
+from typing import Literal
 
 from dotenv import load_dotenv
 
@@ -21,9 +22,9 @@ load_dotenv()  # lee backend/.env antes de crear el cliente de Anthropic
 import pyodbc  # noqa: E402
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, Response  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from pydantic import BaseModel, Field  # noqa: E402
+from pydantic import BaseModel, Field, ValidationError  # noqa: E402
 
-from . import catalogo, claves, db, powerbi, recuperacion, reporte_html, sesion  # noqa: E402
+from . import analisis, catalogo, claves, db, powerbi, recuperacion, reporte_html, sesion  # noqa: E402
 from .consultas import aplicar_filtros_panel, construir_sql, normalizar_salida, rechazo_previo, validar_plan  # noqa: E402
 from .ia import ErrorIA, PlanConsulta, interpretar_con_ia  # noqa: E402
 
@@ -96,6 +97,8 @@ def _interpretacion(plan: PlanConsulta, cat: catalogo.Catalogo) -> dict:
         "desde": plan.desde or None,
         "hasta": plan.hasta or None,
         "tipoSalida": plan.tipo_salida.replace("_", " "),
+        "comparar": plan.comparar,
+        "comparable": medida.comparable,
         "catalogoVersion": catalogo.VERSION,
     }
 
@@ -131,7 +134,19 @@ def _ejecutar_plan(usuario: str, pregunta: str, plan: PlanConsulta, cat: catalog
         db.registrar_consulta(usuario, pregunta, estado, motivo, plan_dict, uso=uso, dominio=plan.dominio or None)
         return {"estado": estado, "motivo": motivo}
 
+    dominio = cat.disponibles[plan.dominio]
+    # El plan que se devuelve es el pedido. Al comparar sin período, el backend elige los
+    # últimos 12 meses solo para esta ejecución: si esas fechas volvieran en el plan, un
+    # dashboard guardado quedaría fijo en ellas en vez de mostrar siempre lo último.
+    plan_pedido = plan.model_dump()
+    # Si la comparación no tiene sentido para esta métrica, no se calcula: se explica por qué
+    plan, plan_anterior, comparacion = analisis.preparar_comparacion(plan, dominio)
+    plan_dict = plan.model_dump()
+
     consultas = construir_sql(plan, cat)
+    if plan_anterior:
+        consultas |= {f"anterior_{nombre}": consulta for nombre, consulta in construir_sql(plan_anterior, cat).items()
+                      if nombre != "detalle"}
     sql_log = "\n".join(f"-- {nombre}\n{sql}" for nombre, (sql, _) in consultas.items())
     try:
         datos = {nombre: db.ejecutar(sql, params) for nombre, (sql, params) in consultas.items()}
@@ -141,19 +156,32 @@ def _ejecutar_plan(usuario: str, pregunta: str, plan: PlanConsulta, cat: catalog
     db.registrar_consulta(usuario, pregunta, "validado", plan=plan_dict, sql=sql_log, uso=uso, dominio=plan.dominio)
 
     total = datos["total"]["filas"][0]
+    serie = datos["serie"]["filas"] if "serie" in datos else []
+    resultado = {
+        "total": total["valor"] or 0,
+        "cantidad": total["cantidad"],
+        "serie": serie,
+        "detalle": {
+            **datos.get("detalle", {"columnas": [], "filas": []}),
+            "columnasMoneda": [a.etiqueta for a in dominio.detalle if a.moneda],
+        },
+    }
+    if comparacion is not None:
+        if plan_anterior:
+            analisis.completar_comparacion(
+                comparacion, total["valor"], datos["anterior_total"]["filas"][0]["valor"], serie,
+                datos["anterior_serie"]["filas"] if "anterior_serie" in datos else [], plan.agrupar_por,
+            )
+        resultado["comparacion"] = comparacion
+    proyeccion = analisis.proyectar(serie, plan, dominio)
+    if proyeccion is not None:
+        resultado["proyeccion"] = proyeccion
+
     return {
         "estado": "validado",
-        "plan": plan_dict,  # el frontend lo reenvía a /api/reportes al cambiar filtros
+        "plan": plan_pedido,  # el frontend lo reenvía a /api/reportes al cambiar filtros
         "interpretacion": _interpretacion(plan, cat),
-        "resultado": {
-            "total": total["valor"] or 0,
-            "cantidad": total["cantidad"],
-            "serie": datos["serie"]["filas"] if "serie" in datos else [],
-            "detalle": {
-                **datos.get("detalle", {"columnas": [], "filas": []}),
-                "columnasMoneda": [a.etiqueta for a in cat.disponibles[plan.dominio].detalle if a.moneda],
-            },
-        },
+        "resultado": resultado,
     }
 
 
@@ -230,7 +258,11 @@ def ver_catalogo(usuario: str = Depends(usuario_autenticado)):
             {
                 "codigo": cod,
                 "nombre": cat.dominios[cod],
-                "metricas": [{"clave": clave, "etiqueta": m.etiqueta} for clave, m in d.medidas.items()],
+                "metricas": [
+                    {"clave": clave, "etiqueta": m.etiqueta, "comparable": m.comparable, "nota": m.nota,
+                     "proyectable": catalogo.proyectable(d, clave)}
+                    for clave, m in d.medidas.items()
+                ],
                 "filtros": [
                     {"campo": campo, "etiqueta": a.etiqueta, "valores": d.valores[campo]}
                     for campo, a in d.atributos.items()
@@ -279,17 +311,25 @@ class SolicitudExportacion(BaseModel):
     graficos: list[GraficoExportar] = Field(min_length=1, max_length=30)
 
 
-def _graficos_a_exportar(solicitud: SolicitudExportacion, usuario: str) -> tuple[catalogo.Catalogo, list[tuple[str, PlanConsulta]]]:
-    """Los planes vienen del navegador, así que pasan por la misma validación."""
+def _validar_graficos(graficos: list[GraficoExportar], usuario: str, verbo: str,
+                      permitidos: set[str] = frozenset()) -> tuple[catalogo.Catalogo, list[tuple[str, PlanConsulta]]]:
+    """Los planes vienen del navegador, así que pasan por la misma validación.
+    `permitidos` = planes (en JSON) ya guardados que se aceptan sin revalidar: un editor
+    puede reordenar o quitar gráficos de áreas que él no ve, pero no crearlos."""
     dominios_usuario, cat = _contexto_usuario(usuario)
-    graficos = []
-    for g in solicitud.graficos:
+    validos = []
+    for g in graficos:
         plan = normalizar_salida(g.plan.model_copy(update={"accion": "consultar"}))
-        motivo = validar_plan(plan, cat, dominios_usuario)
-        if motivo:
-            raise HTTPException(status_code=400, detail=f"No se pudo exportar «{g.titulo}»: {motivo}")
-        graficos.append((g.titulo, plan))
-    return cat, graficos
+        if plan.model_dump_json() not in permitidos:
+            motivo = validar_plan(plan, cat, dominios_usuario)
+            if motivo:
+                raise HTTPException(status_code=400, detail=f"No se pudo {verbo} «{g.titulo}»: {motivo}")
+        validos.append((g.titulo, plan))
+    return cat, validos
+
+
+def _graficos_a_exportar(solicitud: SolicitudExportacion, usuario: str) -> tuple[catalogo.Catalogo, list[tuple[str, PlanConsulta]]]:
+    return _validar_graficos(solicitud.graficos, usuario, "exportar")
 
 
 ORGANIZACION = os.getenv("ORGANIZACION", "Ruta Smart")
@@ -371,8 +411,10 @@ def crear_usuario(datos: UsuarioNuevo, usuario: str = Depends(usuario_superadmin
 
 @app.post("/api/usuarios/{cod_usuario}")
 def editar_usuario(cod_usuario: str, datos: DatosUsuario, usuario: str = Depends(usuario_superadmin)):
+    # SQL Server no distingue mayúsculas: "usr_admin" en la URL es el mismo USR_ADMIN
+    cod_usuario = cod_usuario.strip().upper()
     # Evita quedar sin nadie que pueda administrar
-    if cod_usuario == usuario and (not datos.activo or not datos.superadmin):
+    if cod_usuario == usuario.upper() and (not datos.activo or not datos.superadmin):
         raise HTTPException(status_code=400, detail="No puedes desactivar ni quitarte el rol de superadministrador a ti mismo.")
     try:
         _validar_dominios(datos.dominios)
@@ -460,11 +502,22 @@ def aprobar_solicitud(id_solicitud: int, datos: UsuarioNuevo, tareas: Background
         # Primero se toma la solicitud, así dos aprobaciones simultáneas no crean dos cuentas
         if not db.resolver_solicitud(id_solicitud, "APROBADA", usuario):
             raise HTTPException(status_code=409, detail="Esa solicitud ya fue resuelta.")
-        if not db.guardar_usuario(cod, datos.nombre.strip(), datos.correo or None, datos.activo, datos.superadmin, datos.dominios, crear=True):
-            db.resolver_solicitud(id_solicitud, "PENDIENTE", None)
-            raise HTTPException(status_code=409, detail=f"El usuario {cod} ya existe.")
     except pyodbc.Error as e:
         raise _error_bd(e) from e
+    try:
+        creado = db.guardar_usuario(cod, datos.nombre.strip(), datos.correo or None, datos.activo, datos.superadmin, datos.dominios, crear=True)
+    except pyodbc.Error as e:
+        creado = None
+        error = e
+    if not creado:
+        # La solicitud vuelve a quedar pendiente: no puede quedar aprobada sin cuenta creada
+        try:
+            db.resolver_solicitud(id_solicitud, "PENDIENTE", None)
+        except pyodbc.Error:
+            pass
+        if creado is None:
+            raise _error_bd(error) from error
+        raise HTTPException(status_code=409, detail=f"El usuario {cod} ya existe.")
     db.registrar_consulta(usuario, f"[admin] aprueba solicitud {id_solicitud}: {cod}", "validado")
     if datos.correo:
         tareas.add_task(recuperacion.solicitar, cod)
@@ -521,3 +574,310 @@ def reejecutar(solicitud: SolicitudReporte, usuario: str = Depends(usuario_auten
     dominios_usuario, cat = _contexto_usuario(usuario)
     plan = solicitud.plan.model_copy(update={"accion": "consultar"})
     return _ejecutar_plan(usuario, f"[filtros] {solicitud.pregunta.strip()}", plan, cat, dominios_usuario, None)
+
+
+# --- Carpetas y dashboards compartidos --------------------------------------------
+# Una carpeta es un repositorio compartido. Roles: PROPIETARIO (todo, incluido
+# compartir), EDITOR (crea, edita y borra dashboards) y LECTOR (solo los ve).
+# Ver db/sqlserver/25_CREATE_DASHBOARDS.sql.
+
+EDITAN = (db.PROPIETARIO, "EDITOR")
+
+
+class DatosCarpeta(BaseModel):
+    nombre: str = Field(min_length=1, max_length=100)
+    descripcion: str = Field(default="", max_length=500)
+
+
+class MiembroCarpeta(BaseModel):
+    usuario: str = Field(min_length=1, max_length=50)
+    rol: Literal["LECTOR", "EDITOR", ""]  # "" quita al miembro
+
+
+class DatosDashboard(BaseModel):
+    nombre: str = Field(min_length=1, max_length=100)
+    descripcion: str = Field(default="", max_length=500)
+    graficos: list[GraficoExportar] = Field(min_length=1, max_length=30)
+
+
+class DashboardNuevo(DatosDashboard):
+    carpeta: int
+
+
+class DashboardEditado(DatosDashboard):
+    version: int
+
+
+class PermisoDashboard(BaseModel):
+    usuario: str = Field(min_length=1, max_length=50)
+    rol: Literal["LECTOR", "EDITOR", ""]  # "" = el mismo rol que tiene en la carpeta
+
+
+def usuario_activo(usuario: str = Depends(usuario_autenticado)) -> str:
+    """El token dura 8 horas: si en ese tiempo desactivan la cuenta, deja de servir aquí."""
+    try:
+        datos = db.perfil(usuario)
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+    if datos is None:
+        raise HTTPException(status_code=403, detail=f"El usuario {usuario} no existe o está inactivo.")
+    return usuario
+
+
+def _rol(usuario: str, id_carpeta: int, permitidos: tuple[str, ...], accion: str) -> str:
+    """Rol del usuario en la carpeta; 404 si no la ve, 403 si su rol no alcanza."""
+    try:
+        rol = db.rol_en_carpeta(usuario, id_carpeta)
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+    if rol is None:
+        raise HTTPException(status_code=404, detail="La carpeta no existe o no tienes acceso a ella.")
+    if rol not in permitidos:
+        raise HTTPException(status_code=403, detail=f"Tu rol en esta carpeta ({rol.lower()}) no permite {accion}.")
+    return rol
+
+
+def _dashboard_y_rol(usuario: str, id_dashboard: int, permitidos: tuple[str, ...], accion: str) -> tuple[dict, str]:
+    """Dashboard y rol efectivo del usuario en él (con la excepción por dashboard, si la hay)."""
+    try:
+        datos = db.dashboard(id_dashboard)
+        rol = db.rol_en_dashboard(usuario, id_dashboard) if datos else None
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+    if datos is None or rol is None:
+        raise HTTPException(status_code=404, detail="El dashboard no existe o no tienes acceso a él.")
+    if rol not in permitidos:
+        raise HTTPException(status_code=403, detail=f"Tu rol en este dashboard ({rol.lower()}) no permite {accion}.")
+    return datos, rol
+
+
+@app.get("/api/usuarios-directorio")
+def ver_directorio(_usuario: str = Depends(usuario_activo)):
+    """Personas con quienes se puede compartir una carpeta (solo código y nombre)."""
+    try:
+        return {"usuarios": db.directorio()}
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+
+
+@app.get("/api/carpetas")
+def ver_carpetas(usuario: str = Depends(usuario_activo)):
+    try:
+        return {"carpetas": db.carpetas(usuario)}
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+
+
+@app.post("/api/carpetas")
+def crear_carpeta(datos: DatosCarpeta, usuario: str = Depends(usuario_autenticado)):
+    if not datos.nombre.strip():
+        raise HTTPException(status_code=400, detail="Escribe un nombre para la carpeta.")
+    try:
+        id_carpeta = db.crear_carpeta(usuario, datos.nombre.strip(), datos.descripcion.strip())
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+    if id_carpeta is None:
+        raise HTTPException(status_code=403, detail=f"El usuario {usuario} no existe o está inactivo.")
+    db.registrar_consulta(usuario, f"[carpeta] crea {id_carpeta}: {datos.nombre}", "validado")
+    return {"id": id_carpeta}
+
+
+@app.post("/api/carpetas/{id_carpeta}")
+def editar_carpeta(id_carpeta: int, datos: DatosCarpeta, usuario: str = Depends(usuario_autenticado)):
+    _rol(usuario, id_carpeta, (db.PROPIETARIO,), "editar la carpeta")
+    if not datos.nombre.strip():
+        raise HTTPException(status_code=400, detail="Escribe un nombre para la carpeta.")
+    try:
+        db.editar_carpeta(id_carpeta, datos.nombre.strip(), datos.descripcion.strip())
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+    return {"ok": True}
+
+
+@app.post("/api/carpetas/{id_carpeta}/eliminar")
+def eliminar_carpeta(id_carpeta: int, usuario: str = Depends(usuario_autenticado)):
+    _rol(usuario, id_carpeta, (db.PROPIETARIO,), "eliminar la carpeta")
+    try:
+        db.eliminar_carpeta(id_carpeta)
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+    db.registrar_consulta(usuario, f"[carpeta] elimina {id_carpeta}", "validado")
+    return {"ok": True}
+
+
+@app.get("/api/carpetas/{id_carpeta}/miembros")
+def ver_miembros(id_carpeta: int, usuario: str = Depends(usuario_autenticado)):
+    _rol(usuario, id_carpeta, (db.PROPIETARIO, *db.ROLES_MIEMBRO), "ver los miembros")
+    try:
+        return {"miembros": db.miembros(id_carpeta)}
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+
+
+@app.post("/api/carpetas/{id_carpeta}/miembros")
+def guardar_miembro(id_carpeta: int, datos: MiembroCarpeta, usuario: str = Depends(usuario_autenticado)):
+    _rol(usuario, id_carpeta, (db.PROPIETARIO,), "compartir la carpeta")
+    cod = datos.usuario.strip().upper()
+    try:
+        guardado = db.guardar_miembro(id_carpeta, cod, datos.rol or None)
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+    if not guardado:
+        raise HTTPException(status_code=400, detail=f"No se puede compartir con {cod}: no existe, está inactivo o es el propietario.")
+    accion = f"da rol {datos.rol} a" if datos.rol else "quita a"
+    db.registrar_consulta(usuario, f"[carpeta {id_carpeta}] {accion} {cod}", "validado")
+    return {"ok": True}
+
+
+@app.post("/api/dashboards")
+def crear_dashboard(datos: DashboardNuevo, usuario: str = Depends(usuario_autenticado)):
+    _rol(usuario, datos.carpeta, EDITAN, "guardar dashboards en ella")
+    if not datos.nombre.strip():
+        raise HTTPException(status_code=400, detail="Escribe un nombre para el dashboard.")
+    _, graficos = _validar_graficos(datos.graficos, usuario, "guardar")
+    try:
+        id_dashboard = db.crear_dashboard(usuario, datos.carpeta, datos.nombre.strip(), datos.descripcion.strip(),
+                                          [(titulo, plan.model_dump_json()) for titulo, plan in graficos])
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+    db.registrar_consulta(usuario, f"[dashboard] crea {id_dashboard} en carpeta {datos.carpeta}", "validado")
+    return {"id": id_dashboard}
+
+
+@app.get("/api/dashboards/{id_dashboard}")
+def abrir_dashboard(id_dashboard: int, usuario: str = Depends(usuario_autenticado)):
+    """Vuelve a ejecutar cada gráfico guardado con los permisos de quien lo abre: los
+    datos están al día y compartir un dashboard no da acceso a otras áreas."""
+    datos, rol = _dashboard_y_rol(usuario, id_dashboard, (db.PROPIETARIO, *db.ROLES_MIEMBRO), "verlo")
+    dominios_usuario, cat = _contexto_usuario(usuario)
+    graficos = []
+    for numero, guardado in enumerate(datos.pop("graficos")):
+        base = {"id": f"g{numero}", "pregunta": guardado["titulo"]}
+        try:
+            plan = PlanConsulta.model_validate_json(guardado["plan"])
+        except ValidationError:
+            graficos.append({**base, "error": "Este gráfico ya no es compatible con el catálogo actual."})
+            continue
+        base["plan"] = plan.model_dump()
+        if plan.dominio not in dominios_usuario:
+            graficos.append({**base, "sinAcceso": cat.dominios.get(plan.dominio, plan.dominio)})
+            continue
+        try:
+            r = _ejecutar_plan(usuario, f"[dashboard {id_dashboard}] {guardado['titulo']}",
+                               plan.model_copy(update={"accion": "consultar"}), cat, dominios_usuario, None)
+        except HTTPException as e:
+            graficos.append({**base, "error": e.detail})
+            continue
+        if r["estado"] != "validado":
+            graficos.append({**base, "error": r["motivo"]})
+            continue
+        graficos.append({**base, "plan": r["plan"], "interpretacion": r["interpretacion"], "resultado": r["resultado"]})
+    return {**datos, "rol": rol, "graficos": graficos}
+
+
+@app.post("/api/dashboards/{id_dashboard}")
+def editar_dashboard(id_dashboard: int, datos: DashboardEditado, usuario: str = Depends(usuario_autenticado)):
+    guardado, _ = _dashboard_y_rol(usuario, id_dashboard, EDITAN, "editarlo")
+    if not datos.nombre.strip():
+        raise HTTPException(status_code=400, detail="Escribe un nombre para el dashboard.")
+    # Los gráficos que ya estaban se aceptan aunque sean de un área que este editor no ve
+    previos = set()
+    for g in guardado["graficos"]:
+        try:
+            previos.add(normalizar_salida(PlanConsulta.model_validate_json(g["plan"])
+                                          .model_copy(update={"accion": "consultar"})).model_dump_json())
+        except ValidationError:
+            pass
+    _, graficos = _validar_graficos(datos.graficos, usuario, "guardar", previos)
+    try:
+        ok = db.actualizar_dashboard(id_dashboard, usuario, datos.nombre.strip(), datos.descripcion.strip(),
+                                     [(titulo, plan.model_dump_json()) for titulo, plan in graficos], datos.version)
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+    if not ok:
+        raise HTTPException(status_code=409, detail="Otra persona guardó cambios en este dashboard. Vuelve a abrirlo para verlos.")
+    db.registrar_consulta(usuario, f"[dashboard] edita {id_dashboard}", "validado")
+    return {"ok": True, "version": datos.version + 1}
+
+
+@app.post("/api/dashboards/{id_dashboard}/eliminar")
+def eliminar_dashboard(id_dashboard: int, usuario: str = Depends(usuario_autenticado)):
+    _dashboard_y_rol(usuario, id_dashboard, EDITAN, "eliminarlo")
+    try:
+        db.eliminar_dashboard(id_dashboard)
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+    db.registrar_consulta(usuario, f"[dashboard] elimina {id_dashboard}", "validado")
+    return {"ok": True}
+
+
+# Permiso por dashboard: el propietario de la carpeta puede dar a un miembro un rol
+# distinto en un dashboard puntual (ver db/sqlserver/26_DASHBOARD_PERMISO.sql).
+
+@app.get("/api/dashboards/{id_dashboard}/permisos")
+def ver_permisos_dashboard(id_dashboard: int, usuario: str = Depends(usuario_autenticado)):
+    _dashboard_y_rol(usuario, id_dashboard, (db.PROPIETARIO,), "ver sus permisos")
+    try:
+        return {"miembros": db.permisos_dashboard(id_dashboard)}
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+
+
+@app.post("/api/dashboards/{id_dashboard}/permisos")
+def guardar_permiso_dashboard(id_dashboard: int, datos: PermisoDashboard, usuario: str = Depends(usuario_autenticado)):
+    _dashboard_y_rol(usuario, id_dashboard, (db.PROPIETARIO,), "cambiar sus permisos")
+    cod = datos.usuario.strip().upper()
+    try:
+        guardado = db.guardar_permiso_dashboard(id_dashboard, cod, datos.rol or None)
+    except pyodbc.Error as e:
+        raise _error_bd(e) from e
+    if not guardado:
+        raise HTTPException(status_code=400, detail=f"{cod} no es miembro de la carpeta: agrégalo primero desde «Compartir».")
+    accion = f"da rol {datos.rol} a" if datos.rol else "devuelve el rol de la carpeta a"
+    db.registrar_consulta(usuario, f"[dashboard {id_dashboard}] {accion} {cod}", "validado")
+    return {"ok": True}
+
+
+# --- Proyecciones -----------------------------------------------------------------
+# Módulo del menú lateral: regresión lineal sobre la serie mensual completa de una
+# métrica, calculada con los datos reales (analisis.proyectar).
+
+class SolicitudProyeccion(BaseModel):
+    dominio: str = Field(min_length=1, max_length=10)
+    metrica: str = Field(min_length=1, max_length=50)
+
+
+@app.get("/api/proyecciones")
+def ver_proyecciones(usuario: str = Depends(usuario_autenticado)):
+    """Series que el usuario puede proyectar: primero las recomendadas, con su para qué."""
+    dominios_usuario, cat = _contexto_usuario(usuario)
+    series = []
+    for cod, d in cat.disponibles.items():
+        if cod not in dominios_usuario:
+            continue
+        recomendadas = catalogo.PROYECCIONES.get(cod, {})
+        claves = [k for k in recomendadas if k in d.medidas] + [k for k in d.medidas if k not in recomendadas]
+        series += [
+            {"dominio": cod, "area": cat.dominios[cod], "metrica": k, "etiqueta": d.medidas[k].etiqueta,
+             "moneda": d.medidas[k].moneda, "motivo": recomendadas.get(k, ""), "recomendada": k in recomendadas}
+            for k in claves if catalogo.proyectable(d, k)
+        ]
+    return {"series": series}
+
+
+@app.post("/api/proyecciones")
+def calcular_proyeccion(solicitud: SolicitudProyeccion, usuario: str = Depends(usuario_autenticado)):
+    """El plan lo arma el backend (toda la historia, por mes): no se acepta uno del navegador."""
+    dominios_usuario, cat = _contexto_usuario(usuario)
+    dominio = cat.disponibles.get(solicitud.dominio)
+    if solicitud.dominio not in dominios_usuario or dominio is None:
+        raise HTTPException(status_code=403, detail="No tienes acceso a esa área.")
+    if not catalogo.proyectable(dominio, solicitud.metrica):
+        raise HTTPException(status_code=400, detail="Esa métrica no se puede proyectar.")
+    etiqueta = dominio.medidas[solicitud.metrica].etiqueta
+    plan = PlanConsulta(
+        accion="consultar", motivo_rechazo="", dominio=solicitud.dominio, titulo=f"Proyección: {etiqueta}",
+        metrica=solicitud.metrica, agrupar_por=catalogo.MES, filtros=[], desde="", hasta="",
+        tipo_salida="grafico_lineas",
+    )
+    return _ejecutar_plan(usuario, f"[proyección] {etiqueta}", plan, cat, dominios_usuario, None)

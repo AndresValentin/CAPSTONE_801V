@@ -36,11 +36,20 @@ async function llamar(ruta, cuerpo, token) {
   if (!res.ok) {
     if (res.status === 401 && token) cerrarSesion()
     const { detail } = await res.json().catch(() => ({}))
-    const detalle = typeof detail === 'string' ? detail : JSON.stringify(detail)
-    console.error(`[api] ${ruta} respondió ${res.status}:`, detalle)
-    throw new ErrorApi(res.status, detalle)
+    console.error(`[api] ${ruta} respondió ${res.status}:`, detail)
+    throw new ErrorApi(res.status, mensajeDeError(res.status, detail))
   }
   return res.json()
+}
+
+// El backend explica sus errores en `detail` (texto). Un 422 de FastAPI trae una lista
+// técnica de campos: a la pantalla va un mensaje entendible y el detalle queda en la consola.
+function mensajeDeError(estado, detail) {
+  if (typeof detail === 'string' && detail) return detail
+  if (estado === 422) return 'Algún dato no tiene el formato o el largo permitido. Revísalo e intenta de nuevo.'
+  if (estado === 404) return 'No se encontró lo que buscabas, o no tienes acceso.'
+  if (estado >= 500) return 'El servidor tuvo un problema. Intenta nuevamente en unos minutos.'
+  return 'No se pudo completar la acción.'
 }
 
 // La sesión dura lo que la pestaña: { token, usuario, nombre, dominios: [{ codigo, nombre }] }.
@@ -146,6 +155,74 @@ export function rechazarSolicitud(id) {
   return llamar(`/api/solicitudes-acceso/${id}/rechazar`, {}, tokenActual())
 }
 
+// Carpetas compartidas y dashboards guardados en el servidor.
+// Roles en una carpeta: PROPIETARIO, EDITOR o LECTOR; el backend los exige en cada llamada.
+export function listarCarpetas() {
+  return llamar('/api/carpetas', undefined, tokenActual())
+}
+
+export function crearCarpeta(datos) {
+  return llamar('/api/carpetas', datos, tokenActual())
+}
+
+export function editarCarpeta(id, datos) {
+  return llamar(`/api/carpetas/${id}`, datos, tokenActual())
+}
+
+export function eliminarCarpeta(id) {
+  return llamar(`/api/carpetas/${id}/eliminar`, {}, tokenActual())
+}
+
+export function listarMiembros(id) {
+  return llamar(`/api/carpetas/${id}/miembros`, undefined, tokenActual())
+}
+
+// rol '' quita al miembro
+export function guardarMiembro(id, usuario, rol) {
+  return llamar(`/api/carpetas/${id}/miembros`, { usuario, rol }, tokenActual())
+}
+
+export function directorioUsuarios() {
+  return llamar('/api/usuarios-directorio', undefined, tokenActual())
+}
+
+// `graficos` = [{ titulo, plan }]
+export function guardarDashboard(datos) {
+  return llamar('/api/dashboards', datos, tokenActual())
+}
+
+// Vuelve a ejecutar cada gráfico con los permisos de quien lo abre
+export function abrirDashboard(id) {
+  return llamar(`/api/dashboards/${id}`, undefined, tokenActual())
+}
+
+// `version` evita pisar cambios de otro editor (409 si alguien guardó antes)
+export function actualizarDashboard(id, datos) {
+  return llamar(`/api/dashboards/${id}`, datos, tokenActual())
+}
+
+export function eliminarDashboard(id) {
+  return llamar(`/api/dashboards/${id}/eliminar`, {}, tokenActual())
+}
+
+// Excepciones por dashboard (solo el propietario de la carpeta). rol '' = el de la carpeta
+export function listarPermisosDashboard(id) {
+  return llamar(`/api/dashboards/${id}/permisos`, undefined, tokenActual())
+}
+
+export function guardarPermisoDashboard(id, usuario, rol) {
+  return llamar(`/api/dashboards/${id}/permisos`, { usuario, rol }, tokenActual())
+}
+
+// Módulo de proyecciones: series que se pueden proyectar y el cálculo de una
+export function listarProyecciones() {
+  return llamar('/api/proyecciones', undefined, tokenActual())
+}
+
+export function calcularProyeccion(dominio, metrica) {
+  return llamar('/api/proyecciones', { dominio, metrica }, tokenActual())
+}
+
 // Las formas de las regiones no cambian: se piden una vez por sesión
 let mapaChile = null
 export function obtenerMapaChile() {
@@ -179,7 +256,7 @@ export async function descargarReporte(formato, titulo, graficos) {
   if (!res.ok) {
     if (res.status === 401) cerrarSesion()
     const { detail } = await res.json().catch(() => ({}))
-    throw new ErrorApi(res.status, typeof detail === 'string' ? detail : 'No se pudo generar el archivo.')
+    throw new ErrorApi(res.status, typeof detail === 'string' && detail ? detail : 'No se pudo generar el archivo.')
   }
   const url = URL.createObjectURL(await res.blob())
   const enlace = document.createElement('a')

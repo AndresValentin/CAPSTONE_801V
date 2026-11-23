@@ -9,7 +9,7 @@ import os
 from typing import Literal
 
 import anthropic
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from . import catalogo
 
@@ -18,22 +18,30 @@ from . import catalogo
 MODELO = os.getenv("CLAUDE_MODEL", "claude-haiku-5-5")
 
 
+# Los largos máximos cortan planes absurdos que lleguen desde el navegador
+# (/api/reportes, dashboards) antes de llegar a la validación o a la BD.
 class FiltroPlan(BaseModel):
-    campo: str
-    valor: str
+    campo: str = Field(max_length=50)
+    valor: str = Field(max_length=200)
 
 
 class PlanConsulta(BaseModel):
     accion: Literal["consultar", "rechazar", "aclarar"]
     motivo_rechazo: str
-    dominio: str
+    dominio: str = Field(max_length=10)
     titulo: str
-    metrica: str
-    agrupar_por: str
-    filtros: list[FiltroPlan]
-    desde: str
-    hasta: str
-    tipo_salida: str
+    metrica: str = Field(max_length=50)
+    agrupar_por: str = Field(max_length=50)
+    filtros: list[FiltroPlan] = Field(max_length=20)
+    desde: str = Field(max_length=20)  # el formato AAAA-MM se revisa en validar_plan, con un mensaje claro
+    hasta: str = Field(max_length=20)
+    tipo_salida: str = Field(max_length=20)
+    # Con qué período comparar. Tiene valor por defecto para que los planes guardados
+    # antes de existir este campo sigan siendo válidos.
+    comparar: Literal["", "periodo_anterior", "anio_anterior"] = ""
+
+
+COMPARACIONES = ["", "periodo_anterior", "anio_anterior"]
 
 
 class ErrorIA(Exception):
@@ -72,9 +80,10 @@ def _schema_plan(cat: catalogo.Catalogo, dominios_usuario: set[str]) -> dict:
             "desde": {"type": "string"},
             "hasta": {"type": "string"},
             "tipo_salida": {"type": "string", "enum": catalogo.TIPOS_SALIDA},
+            "comparar": {"type": "string", "enum": COMPARACIONES},
         },
         "required": ["accion", "motivo_rechazo", "dominio", "titulo", "metrica", "agrupar_por",
-                     "filtros", "desde", "hasta", "tipo_salida"],
+                     "filtros", "desde", "hasta", "tipo_salida", "comparar"],
         "additionalProperties": False,
     }
 
@@ -94,6 +103,7 @@ Cómo armar el plan:
 - "desde" y "hasta" van en formato AAAA-MM, o "" si la pregunta no menciona un período. Un mes puntual usa el mismo valor en ambos.
 - Elige "agrupar_por" según lo que se quiera comparar ("por región" -> region, "por mes" o evolución -> mes); si se pide un único número, "ninguno".
 - Elige "tipo_salida" acorde: un número -> kpi; comparación entre categorías -> grafico_barras; evolución en el tiempo -> grafico_lineas; distribución o reparto -> grafico_torta solo si hay 5 categorías o menos (con más, usa grafico_barras); listado -> tabla; si pide un mapa o ver Chile por región -> grafico_mapa con "agrupar_por": "region". Si el usuario pide un tipo expresamente, respétalo.
+- "comparar": "anio_anterior" si pide comparar con el año pasado o con el mismo período del año anterior; "periodo_anterior" si pide comparar con el mes o período anterior (o "vs antes" sin decir cuál); "" si no pide comparar. No rechaces ni pidas aclaración por esto: otro componente decide si la métrica se puede comparar.
 - "titulo" es un título breve en español para el reporte.
 - Usa "accion": "rechazar" cuando la pregunta pida modificar o borrar datos, pida campos no autorizados (en especial datos personales de clientes) o no tenga relación con el negocio.
 - Usa "accion": "aclarar" cuando la pregunta sea tan vaga que no se pueda saber qué medir (por ejemplo un saludo). En "motivo_rechazo" pregunta qué quiere medir, con qué filtros y cómo quiere verlo (barras, líneas, torta, KPI o tabla).

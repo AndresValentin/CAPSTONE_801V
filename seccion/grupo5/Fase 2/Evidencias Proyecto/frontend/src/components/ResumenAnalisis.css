@@ -1,0 +1,110 @@
+.analisis {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-line);
+  font-size: 0.82rem;
+  color: var(--color-text);
+}
+
+.analisis-bloque {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.analisis-titulo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.analisis-linea strong {
+  font-weight: 700;
+}
+
+.analisis-rango,
+.analisis-secundario {
+  color: var(--color-text-muted);
+}
+
+.analisis-secundario {
+  font-size: 0.78rem;
+}
+
+.analisis-variacion {
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.variacion-buena {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.variacion-mala {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.variacion-neutra {
+  color: var(--color-text-muted);
+  background: var(--color-surface-3);
+}
+
+.analisis-omitida {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.analisis-omitida svg,
+.analisis-avisos li svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.analisis-avisos summary {
+  cursor: pointer;
+  color: var(--color-warning);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.analisis-avisos ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.analisis-avisos li {
+  display: flex;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.analisis-avisos li svg {
+  color: var(--color-warning);
+}
+
+/* Variación bajo el número de un KPI */
+.report-kpi-variacion {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+}

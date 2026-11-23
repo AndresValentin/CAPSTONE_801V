@@ -276,6 +276,306 @@ def aplicar_recuperacion(token_hash: str, clave_hash: str) -> bool:
     return True
 
 
+# --- Carpetas y dashboards compartidos (app.*) ----------------------------------
+# Una carpeta es un repositorio compartido: su propietario agrega miembros como
+# LECTOR o EDITOR y todos ven los mismos dashboards. Un dashboard guarda los PLANES
+# de sus gráficos, nunca los datos: al abrirlo se vuelven a ejecutar con los
+# permisos de quien lo mira (ver main.py).
+
+PROPIETARIO = "PROPIETARIO"
+ROLES_MIEMBRO = ("LECTOR", "EDITOR")
+
+# Condición "el usuario ? ve la carpeta C": es su propietario o es miembro
+_VE_CARPETA = """(C.ID_PROPIETARIO = (SELECT ID_USUARIO FROM seguridad.SEG_USUARIO WHERE COD_USUARIO = ?)
+                  OR EXISTS (SELECT 1 FROM app.CARPETA_MIEMBRO M
+                             JOIN seguridad.SEG_USUARIO U ON U.ID_USUARIO = M.ID_USUARIO
+                             WHERE M.ID_CARPETA = C.ID_CARPETA AND U.COD_USUARIO = ?))"""
+
+
+def directorio() -> list[dict]:
+    """Usuarios activos, para elegir con quién compartir. Solo código y nombre."""
+    return [{"usuario": f[0], "nombre": f[1]} for f in _consultar(
+        "SELECT COD_USUARIO, DESC_NOMBRE FROM seguridad.SEG_USUARIO WHERE FLG_ACTIVO = 1 ORDER BY DESC_NOMBRE"
+    )]
+
+
+def rol_en_carpeta(cod_usuario: str, id_carpeta: int) -> str | None:
+    fila = _consultar(
+        """SELECT CASE WHEN C.ID_PROPIETARIO = U.ID_USUARIO THEN 'PROPIETARIO' ELSE M.COD_ROL END
+           FROM app.CARPETA C
+           JOIN seguridad.SEG_USUARIO U ON U.COD_USUARIO = ? AND U.FLG_ACTIVO = 1
+           LEFT JOIN app.CARPETA_MIEMBRO M ON M.ID_CARPETA = C.ID_CARPETA AND M.ID_USUARIO = U.ID_USUARIO
+           WHERE C.ID_CARPETA = ?""",
+        (cod_usuario, id_carpeta),
+    )
+    return fila[0][0] if fila else None
+
+
+def rol_en_dashboard(cod_usuario: str, id_dashboard: int) -> str | None:
+    """Rol efectivo en un dashboard: el propietario de la carpeta siempre es PROPIETARIO;
+    un miembro tiene su excepción para ese dashboard (app.DASHBOARD_PERMISO) o, si no
+    hay, su rol en la carpeta. None si no es miembro."""
+    fila = _consultar(
+        """SELECT CASE WHEN C.ID_PROPIETARIO = U.ID_USUARIO THEN 'PROPIETARIO'
+                       WHEN M.COD_ROL IS NULL THEN NULL
+                       ELSE COALESCE(P.COD_ROL, M.COD_ROL) END
+           FROM app.DASHBOARD D
+           JOIN app.CARPETA C ON C.ID_CARPETA = D.ID_CARPETA
+           JOIN seguridad.SEG_USUARIO U ON U.COD_USUARIO = ? AND U.FLG_ACTIVO = 1
+           LEFT JOIN app.CARPETA_MIEMBRO M ON M.ID_CARPETA = C.ID_CARPETA AND M.ID_USUARIO = U.ID_USUARIO
+           LEFT JOIN app.DASHBOARD_PERMISO P ON P.ID_DASHBOARD = D.ID_DASHBOARD AND P.ID_USUARIO = U.ID_USUARIO
+           WHERE D.ID_DASHBOARD = ?""",
+        (cod_usuario, id_dashboard),
+    )
+    return fila[0][0] if fila else None
+
+
+def permisos_dashboard(id_dashboard: int) -> list[dict]:
+    """Miembros de la carpeta del dashboard con su rol en la carpeta y su excepción ("" = sin excepción)."""
+    return [{"usuario": f[0], "nombre": f[1], "rolCarpeta": f[2], "rol": f[3] or ""} for f in _consultar(
+        """SELECT U.COD_USUARIO, U.DESC_NOMBRE, M.COD_ROL, P.COD_ROL
+           FROM app.DASHBOARD D
+           JOIN app.CARPETA_MIEMBRO M ON M.ID_CARPETA = D.ID_CARPETA
+           JOIN seguridad.SEG_USUARIO U ON U.ID_USUARIO = M.ID_USUARIO
+           LEFT JOIN app.DASHBOARD_PERMISO P ON P.ID_DASHBOARD = D.ID_DASHBOARD AND P.ID_USUARIO = M.ID_USUARIO
+           WHERE D.ID_DASHBOARD = ?
+           ORDER BY U.DESC_NOMBRE""",
+        (id_dashboard,),
+    )]
+
+
+def guardar_permiso_dashboard(id_dashboard: int, cod_miembro: str, rol: str | None) -> bool:
+    """Fija la excepción de un miembro en un dashboard; rol None vuelve a su rol de la
+    carpeta. False si la persona no es miembro de la carpeta."""
+    with closing(_conectar()) as con:
+        cursor = con.cursor()
+        fila = cursor.execute(
+            """SELECT M.ID_USUARIO FROM app.DASHBOARD D
+               JOIN app.CARPETA_MIEMBRO M ON M.ID_CARPETA = D.ID_CARPETA
+               JOIN seguridad.SEG_USUARIO U ON U.ID_USUARIO = M.ID_USUARIO
+               WHERE D.ID_DASHBOARD = ? AND U.COD_USUARIO = ?""",
+            (id_dashboard, cod_miembro),
+        ).fetchone()
+        if fila is None:
+            return False
+        cursor.execute("DELETE FROM app.DASHBOARD_PERMISO WHERE ID_DASHBOARD = ? AND ID_USUARIO = ?", (id_dashboard, fila[0]))
+        if rol:
+            cursor.execute(
+                "INSERT INTO app.DASHBOARD_PERMISO (ID_DASHBOARD, ID_USUARIO, COD_ROL) VALUES (?, ?, ?)",
+                (id_dashboard, fila[0], rol),
+            )
+        con.commit()
+    return True
+
+
+def carpetas(cod_usuario: str) -> list[dict]:
+    """Carpetas que el usuario ve, con su rol y sus dashboards (sin gráficos). Cada
+    dashboard trae el rol efectivo del usuario en él (ver rol_en_dashboard)."""
+    lista = {
+        f[0]: {"id": f[0], "nombre": f[1], "descripcion": f[2] or "", "propietario": f[3], "rol": f[4],
+               "miembros": f[5], "dashboards": []}
+        for f in _consultar(
+            f"""SELECT C.ID_CARPETA, C.DESC_NOMBRE, C.DESC_DESCRIPCION, P.DESC_NOMBRE,
+                       CASE WHEN P.COD_USUARIO = ? THEN 'PROPIETARIO'
+                            ELSE (SELECT M.COD_ROL FROM app.CARPETA_MIEMBRO M
+                                  JOIN seguridad.SEG_USUARIO U ON U.ID_USUARIO = M.ID_USUARIO
+                                  WHERE M.ID_CARPETA = C.ID_CARPETA AND U.COD_USUARIO = ?) END,
+                       (SELECT COUNT(*) FROM app.CARPETA_MIEMBRO M WHERE M.ID_CARPETA = C.ID_CARPETA)
+                FROM app.CARPETA C
+                JOIN seguridad.SEG_USUARIO P ON P.ID_USUARIO = C.ID_PROPIETARIO
+                WHERE {_VE_CARPETA}
+                ORDER BY C.DESC_NOMBRE""",
+            (cod_usuario, cod_usuario, cod_usuario, cod_usuario),
+        )
+    }
+    for f in _consultar(
+        f"""SELECT D.ID_DASHBOARD, D.ID_CARPETA, D.DESC_NOMBRE, D.DESC_DESCRIPCION,
+                   CONVERT(VARCHAR(16), D.DT_ACTUALIZADO, 120), A.DESC_NOMBRE,
+                   (SELECT COUNT(*) FROM app.DASHBOARD_GRAFICO G WHERE G.ID_DASHBOARD = D.ID_DASHBOARD),
+                   (SELECT P.COD_ROL FROM app.DASHBOARD_PERMISO P
+                    JOIN seguridad.SEG_USUARIO U ON U.ID_USUARIO = P.ID_USUARIO
+                    WHERE P.ID_DASHBOARD = D.ID_DASHBOARD AND U.COD_USUARIO = ?),
+                   (SELECT COUNT(*) FROM app.DASHBOARD_PERMISO P WHERE P.ID_DASHBOARD = D.ID_DASHBOARD)
+            FROM app.DASHBOARD D
+            JOIN app.CARPETA C ON C.ID_CARPETA = D.ID_CARPETA
+            LEFT JOIN seguridad.SEG_USUARIO A ON A.ID_USUARIO = D.ID_ACTUALIZADO_POR
+            WHERE {_VE_CARPETA}
+            ORDER BY D.DT_ACTUALIZADO DESC""",
+        (cod_usuario, cod_usuario, cod_usuario),
+    ):
+        carpeta = lista.get(f[1])
+        if carpeta is None:
+            continue  # se creó entre las dos consultas
+        rol = carpeta["rol"] if carpeta["rol"] == PROPIETARIO else (f[7] or carpeta["rol"])
+        carpeta["dashboards"].append({
+            "id": f[0], "nombre": f[2], "descripcion": f[3] or "", "actualizado": f[4],
+            "actualizadoPor": f[5] or "", "graficos": f[6], "rol": rol, "excepciones": f[8],
+        })
+    return list(lista.values())
+
+
+def crear_carpeta(cod_usuario: str, nombre: str, descripcion: str) -> int:
+    with closing(_conectar()) as con:
+        fila = con.cursor().execute(
+            """INSERT INTO app.CARPETA (DESC_NOMBRE, DESC_DESCRIPCION, ID_PROPIETARIO)
+               OUTPUT inserted.ID_CARPETA
+               SELECT ?, ?, ID_USUARIO FROM seguridad.SEG_USUARIO WHERE COD_USUARIO = ? AND FLG_ACTIVO = 1""",
+            (nombre, descripcion or None, cod_usuario),
+        ).fetchone()
+        con.commit()
+    return fila[0] if fila else None  # None: el usuario no existe o está inactivo
+
+
+def editar_carpeta(id_carpeta: int, nombre: str, descripcion: str) -> bool:
+    with closing(_conectar()) as con:
+        cursor = con.cursor()
+        cursor.execute(
+            "UPDATE app.CARPETA SET DESC_NOMBRE = ?, DESC_DESCRIPCION = ? WHERE ID_CARPETA = ?",
+            (nombre, descripcion or None, id_carpeta),
+        )
+        cambiada = cursor.rowcount == 1
+        con.commit()
+    return cambiada
+
+
+def eliminar_carpeta(id_carpeta: int) -> bool:
+    """Borra la carpeta con sus dashboards y miembros (ON DELETE CASCADE)."""
+    with closing(_conectar()) as con:
+        cursor = con.cursor()
+        cursor.execute("DELETE FROM app.CARPETA WHERE ID_CARPETA = ?", (id_carpeta,))
+        borrada = cursor.rowcount == 1
+        con.commit()
+    return borrada
+
+
+def miembros(id_carpeta: int) -> list[dict]:
+    """El propietario primero y luego los miembros."""
+    return [{"usuario": f[0], "nombre": f[1], "rol": f[2]} for f in _consultar(
+        """SELECT U.COD_USUARIO, U.DESC_NOMBRE, 'PROPIETARIO', 0
+           FROM app.CARPETA C JOIN seguridad.SEG_USUARIO U ON U.ID_USUARIO = C.ID_PROPIETARIO
+           WHERE C.ID_CARPETA = ?
+           UNION ALL
+           SELECT U.COD_USUARIO, U.DESC_NOMBRE, M.COD_ROL, 1
+           FROM app.CARPETA_MIEMBRO M JOIN seguridad.SEG_USUARIO U ON U.ID_USUARIO = M.ID_USUARIO
+           WHERE M.ID_CARPETA = ?
+           ORDER BY 4, 2""",
+        (id_carpeta, id_carpeta),
+    )]
+
+
+def guardar_miembro(id_carpeta: int, cod_miembro: str, rol: str | None) -> bool:
+    """Agrega o cambia el rol de un miembro; rol None lo quita. False si el usuario no
+    existe, está inactivo o es el propietario."""
+    with closing(_conectar()) as con:
+        cursor = con.cursor()
+        fila = cursor.execute(
+            """SELECT U.ID_USUARIO FROM seguridad.SEG_USUARIO U
+               JOIN app.CARPETA C ON C.ID_CARPETA = ?
+               WHERE U.COD_USUARIO = ? AND U.FLG_ACTIVO = 1 AND U.ID_USUARIO <> C.ID_PROPIETARIO""",
+            (id_carpeta, cod_miembro),
+        ).fetchone()
+        if fila is None:
+            return False
+        cursor.execute("DELETE FROM app.CARPETA_MIEMBRO WHERE ID_CARPETA = ? AND ID_USUARIO = ?", (id_carpeta, fila[0]))
+        if not rol:
+            # Sale de la carpeta: sus excepciones por dashboard no deben revivir si vuelve
+            cursor.execute(
+                """DELETE P FROM app.DASHBOARD_PERMISO P
+                   JOIN app.DASHBOARD D ON D.ID_DASHBOARD = P.ID_DASHBOARD
+                   WHERE D.ID_CARPETA = ? AND P.ID_USUARIO = ?""",
+                (id_carpeta, fila[0]),
+            )
+        if rol:
+            cursor.execute(
+                "INSERT INTO app.CARPETA_MIEMBRO (ID_CARPETA, ID_USUARIO, COD_ROL) VALUES (?, ?, ?)",
+                (id_carpeta, fila[0], rol),
+            )
+        con.commit()
+    return True
+
+
+def _insertar_graficos(cursor, id_dashboard: int, graficos: list[tuple[str, str]]) -> None:
+    for orden, (titulo, plan_json) in enumerate(graficos, start=1):
+        cursor.execute(
+            """INSERT INTO app.DASHBOARD_GRAFICO (ID_DASHBOARD, NRO_ORDEN, DESC_TITULO, DESC_PLAN_JSON)
+               VALUES (?, ?, ?, ?)""",
+            (id_dashboard, orden, titulo, plan_json),
+        )
+
+
+def crear_dashboard(cod_usuario: str, id_carpeta: int, nombre: str, descripcion: str,
+                    graficos: list[tuple[str, str]]) -> int:
+    """`graficos` = [(título, plan en JSON)], en el orden en que se muestran."""
+    with closing(_conectar()) as con:
+        cursor = con.cursor()
+        id_dashboard = cursor.execute(
+            """INSERT INTO app.DASHBOARD (ID_CARPETA, DESC_NOMBRE, DESC_DESCRIPCION, ID_CREADO_POR, ID_ACTUALIZADO_POR)
+               OUTPUT inserted.ID_DASHBOARD
+               SELECT ?, ?, ?, ID_USUARIO, ID_USUARIO FROM seguridad.SEG_USUARIO WHERE COD_USUARIO = ?""",
+            (id_carpeta, nombre, descripcion or None, cod_usuario),
+        ).fetchone()[0]
+        _insertar_graficos(cursor, id_dashboard, graficos)
+        con.commit()
+    return id_dashboard
+
+
+def dashboard(id_dashboard: int) -> dict | None:
+    fila = _consultar(
+        """SELECT D.ID_DASHBOARD, D.ID_CARPETA, C.DESC_NOMBRE, D.DESC_NOMBRE, D.DESC_DESCRIPCION, D.NUM_VERSION,
+                  CONVERT(VARCHAR(16), D.DT_ACTUALIZADO, 120), A.DESC_NOMBRE, R.DESC_NOMBRE
+           FROM app.DASHBOARD D
+           JOIN app.CARPETA C ON C.ID_CARPETA = D.ID_CARPETA
+           LEFT JOIN seguridad.SEG_USUARIO A ON A.ID_USUARIO = D.ID_ACTUALIZADO_POR
+           LEFT JOIN seguridad.SEG_USUARIO R ON R.ID_USUARIO = D.ID_CREADO_POR
+           WHERE D.ID_DASHBOARD = ?""",
+        (id_dashboard,),
+    )
+    if not fila:
+        return None
+    f = fila[0]
+    graficos = _consultar(
+        "SELECT DESC_TITULO, DESC_PLAN_JSON FROM app.DASHBOARD_GRAFICO WHERE ID_DASHBOARD = ? ORDER BY NRO_ORDEN",
+        (id_dashboard,),
+    )
+    return {
+        "id": f[0], "carpeta": f[1], "carpetaNombre": f[2], "nombre": f[3], "descripcion": f[4] or "",
+        "version": f[5], "actualizado": f[6], "actualizadoPor": f[7] or "", "creadoPor": f[8] or "",
+        "graficos": [{"titulo": g[0], "plan": g[1]} for g in graficos],
+    }
+
+
+def actualizar_dashboard(id_dashboard: int, cod_usuario: str, nombre: str, descripcion: str,
+                         graficos: list[tuple[str, str]], version: int) -> bool:
+    """Reemplaza nombre, descripción y gráficos solo si nadie guardó desde `version`.
+    False si hubo un cambio intermedio: así dos editores no se pisan."""
+    with closing(_conectar()) as con:
+        cursor = con.cursor()
+        cursor.execute(
+            """UPDATE app.DASHBOARD
+               SET DESC_NOMBRE = ?, DESC_DESCRIPCION = ?, NUM_VERSION = NUM_VERSION + 1,
+                   DT_ACTUALIZADO = SYSDATETIME(),
+                   ID_ACTUALIZADO_POR = (SELECT ID_USUARIO FROM seguridad.SEG_USUARIO WHERE COD_USUARIO = ?)
+               WHERE ID_DASHBOARD = ? AND NUM_VERSION = ?""",
+            (nombre, descripcion or None, cod_usuario, id_dashboard, version),
+        )
+        if cursor.rowcount != 1:
+            con.rollback()
+            return False
+        cursor.execute("DELETE FROM app.DASHBOARD_GRAFICO WHERE ID_DASHBOARD = ?", (id_dashboard,))
+        _insertar_graficos(cursor, id_dashboard, graficos)
+        con.commit()
+    return True
+
+
+def eliminar_dashboard(id_dashboard: int) -> bool:
+    with closing(_conectar()) as con:
+        cursor = con.cursor()
+        cursor.execute("DELETE FROM app.DASHBOARD WHERE ID_DASHBOARD = ?", (id_dashboard,))
+        borrado = cursor.rowcount == 1
+        con.commit()
+    return borrado
+
+
 # --- Metadatos ---------------------------------------------------------------
 
 def tablas_disponibles() -> dict[str, str]:

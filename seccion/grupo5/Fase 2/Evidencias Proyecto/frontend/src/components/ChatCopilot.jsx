@@ -6,6 +6,7 @@ import {
 import { EXTENSIONES_ACEPTADAS } from '../lib/importacion.js'
 import { METRICAS, DIMENSIONES, VISUALIZACIONES, completarReporte } from '../data/mockData.js'
 import { reportesDe } from '../hooks/useConversaciones.js'
+import { OPCIONES_COMPARAR } from '../lib/analisis.js'
 import './ChatCopilot.css'
 
 const SUGERENCIAS = [
@@ -61,11 +62,13 @@ function siguientesGraficos(catalogo, conversacion, area) {
 function detalleReporte(interpretacion) {
   // Los reportes del backend ya traen sus etiquetas; los del modo demo se completan aquí
   if (interpretacion.metricaEtiqueta) {
+    const comparar = OPCIONES_COMPARAR.find(([valor]) => valor === interpretacion.comparar)
     return [
       ['Dominio', interpretacion.dominio],
       ['Métrica', interpretacion.metricaEtiqueta],
       ['Agrupado por', interpretacion.dimensionEtiqueta],
       ['Visualización', VISUALIZACIONES[interpretacion.visualizacion] ?? interpretacion.visualizacion],
+      ...(interpretacion.comparar && comparar ? [['Comparado con', comparar[1]]] : []),
     ]
   }
   const r = completarReporte(interpretacion)
@@ -151,8 +154,11 @@ export default function ChatCopilot({
     onEnviar(limpio)
   }
 
+  // Con backend no hay importación: los datos salen de SQL Server
+  const permiteAdjuntar = Boolean(onAdjuntar)
+
   function adjuntar(file) {
-    if (!file || pensando) return
+    if (!file || pensando || !permiteAdjuntar) return
     // El error ya queda registrado como mensaje en el chat
     onAdjuntar(file).catch(() => {})
   }
@@ -166,7 +172,7 @@ export default function ChatCopilot({
   return (
     <section
       className={`chat-copilot ${arrastrando ? 'chat-dragging' : ''}`}
-      onDragOver={(e) => { e.preventDefault(); setArrastrando(true) }}
+      onDragOver={(e) => { e.preventDefault(); if (permiteAdjuntar) setArrastrando(true) }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setArrastrando(false) }}
       onDrop={handleDrop}
     >
@@ -236,24 +242,29 @@ export default function ChatCopilot({
       </div>
 
       <form className="chat-input-row" onSubmit={(e) => { e.preventDefault(); enviar(texto) }}>
-        <input
-          ref={fileRef}
-          type="file"
-          accept={EXTENSIONES_ACEPTADAS}
-          className="chat-file-input"
-          onChange={(e) => { adjuntar(e.target.files[0]); e.target.value = '' }}
-        />
-        <button
-          type="button"
-          className="btn-attach"
-          title="Adjuntar Excel o CSV"
-          onClick={() => fileRef.current?.click()}
-          disabled={pensando}
-        >
-          <Paperclip size={16} />
-        </button>
+        {permiteAdjuntar && (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept={EXTENSIONES_ACEPTADAS}
+              className="chat-file-input"
+              onChange={(e) => { adjuntar(e.target.files[0]); e.target.value = '' }}
+            />
+            <button
+              type="button"
+              className="btn-attach"
+              title="Adjuntar Excel o CSV"
+              onClick={() => fileRef.current?.click()}
+              disabled={pensando}
+            >
+              <Paperclip size={16} />
+            </button>
+          </>
+        )}
         <input
           type="text"
+          maxLength={500}
           placeholder="Ej: genera un reporte del monto pagado por región"
           value={texto}
           onChange={(e) => setTexto(e.target.value)}

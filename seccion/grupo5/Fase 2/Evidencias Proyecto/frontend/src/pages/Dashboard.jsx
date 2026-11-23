@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Database, LogOut, PanelLeft } from 'lucide-react'
+import { Sparkles, Database, LayoutGrid, LogOut, PanelLeft } from 'lucide-react'
 import Sidebar from '../components/Sidebar.jsx'
 import FiltersPanel from '../components/FiltersPanel.jsx'
 import DashboardPanel from '../components/DashboardPanel.jsx'
@@ -19,7 +19,7 @@ import { guardarLocal, leerLocal } from '../lib/persistencia.js'
 import './Dashboard.css'
 
 const CLAVE_IMPORTADOS = 'bi-copilot:importados'
-const PANEL_VACIO = { dominio: '', filtros: {}, desde: '', hasta: '' }
+const PANEL_VACIO = { dominio: '', filtros: {}, desde: '', hasta: '', comparar: '' }
 
 // Filtros del panel a partir del plan de un reporte del backend
 function panelDesdePlan(plan) {
@@ -28,6 +28,7 @@ function panelDesdePlan(plan) {
     filtros: Object.fromEntries(plan.filtros.map((f) => [f.campo, f.valor])),
     desde: plan.desde,
     hasta: plan.hasta,
+    comparar: plan.comparar ?? '',
   }
 }
 
@@ -105,6 +106,7 @@ export default function Dashboard() {
       filtros: Object.entries(nuevo.filtros).map(([campo, valor]) => ({ campo, valor })),
       desde: nuevo.desde,
       hasta: nuevo.hasta,
+      comparar: nuevo.comparar ?? '',
     }
     try {
       const r = await reejecutarReporte(reporte.pregunta, planNuevo)
@@ -116,6 +118,7 @@ export default function Dashboard() {
       const cambios = { plan: r.plan, interpretacion: r.interpretacion, resultado: r.resultado }
       chats.actualizarMensaje(conversacionId, reporte.id, cambios)
       setReporteActivo((prev) => (prev?.id === reporte.id ? { ...prev, ...cambios } : prev))
+      setPanel(panelDesdePlan(r.plan))
       setEstadoPanel({ actualizando: false, error: '' })
     } catch (err) {
       if (numero !== ultimoRecalculo.current) return
@@ -140,6 +143,7 @@ export default function Dashboard() {
       actualizando={estadoPanel.actualizando}
       error={estadoPanel.error}
       titulo={reporteActivo?.esVistaArea ? 'Filtros del área' : graficos.length > 0 ? 'Filtros del gráfico seleccionado' : 'Filtros'}
+      metrica={graficos.length > 0 && !reporteActivo?.esVistaArea ? reporteActivo?.plan?.metrica : null}
     />
   )
 
@@ -151,8 +155,9 @@ export default function Dashboard() {
       verReporte(existente)
       return
     }
+    const area = catalogoBD?.dominios.find((d) => d.codigo === codigo)
+    if (!area?.metricas.length) return
     setPanel({ ...PANEL_VACIO, dominio: codigo })
-    const area = catalogoBD.dominios.find((d) => d.codigo === codigo)
     const numero = ++ultimoRecalculo.current
     setEstadoPanel({ actualizando: true, error: '' })
     const plan = {
@@ -243,10 +248,34 @@ export default function Dashboard() {
 
   function eliminarChat(id) {
     if (id === chats.activa.id) {
+      // Sin esto el panel seguía con los filtros del gráfico borrado y un recálculo
+      // pendiente podía escribir en un chat que ya no existe
+      descartarRecalculos()
+      setPanel(PANEL_VACIO)
       setReporteActivo(null)
       setFiltros(FILTROS_INICIALES)
     }
     chats.eliminarConversacion(id)
+  }
+
+  // Módulo "Proyecciones": agrega la serie mensual con su proyección como un gráfico
+  // más del chat activo, para filtrarla, compararla o guardarla en un dashboard
+  function verProyeccion(respuesta, serie) {
+    const conversacionId = chats.activa.id
+    const pregunta = `Proyección de ${serie.etiqueta.toLowerCase()} (${serie.area})`
+    chats.agregarMensaje(conversacionId, { rol: 'usuario', texto: pregunta })
+    const mensaje = chats.agregarMensaje(conversacionId, {
+      rol: 'asistente',
+      tipo: 'validado',
+      pregunta,
+      texto: 'Agregué la serie mensual con su proyección por regresión lineal al reporte.',
+      interpretacion: respuesta.interpretacion,
+      resultado: respuesta.resultado,
+      plan: respuesta.plan,
+      filtros: FILTROS_INICIALES,
+    })
+    verReporte(mensaje)
+    cerrarSidebarEnMovil()
   }
 
   async function enviarPregunta(pregunta) {
@@ -289,10 +318,16 @@ export default function Dashboard() {
         salir()
         return
       }
+      // 502 (la IA falló), 503 (sin BD) y 403 (cuenta inactiva) traen un motivo útil
+      const conMotivo = [403, 502, 503].includes(err.estado) && err.message
       chats.agregarMensaje(conversacionId, {
         rol: 'asistente',
         tipo: 'error',
-        texto: 'No pude generar el reporte en este momento. Intenta nuevamente en unos minutos.',
+        texto: conMotivo
+          ? `No pude generar el reporte: ${err.message}`
+          : err.estado === 0
+            ? 'No hay conexión con el servidor. Revisa tu red e intenta nuevamente.'
+            : 'No pude generar el reporte en este momento. Intenta nuevamente en unos minutos.',
       })
     } finally {
       setPensandoEn(null)
@@ -360,6 +395,11 @@ export default function Dashboard() {
               ? `${sesion.nombre} · ${sesion.dominios.map((d) => d.nombre).join(', ')}`
               : `Siniestros · ${dataset.length} registros`}
           </span>
+          {usaBackend && (
+            <button className="btn-logout" onClick={() => navigate('/dashboards')}>
+              <LayoutGrid size={14} /> Dashboards
+            </button>
+          )}
           <button className="btn-logout" onClick={salir}>
             <LogOut size={14} /> Cerrar sesión
           </button>
@@ -380,6 +420,8 @@ export default function Dashboard() {
           datos={datosFiltrados}
           sesion={sesion}
           onSalir={salir}
+          modoDemo={!usaBackend}
+          onVerProyeccion={verProyeccion}
         />
         {sidebarAbierto && <div className="sidebar-backdrop" onClick={() => setSidebarAbierto(false)} />}
 
@@ -422,7 +464,7 @@ export default function Dashboard() {
             reporteActivoId={reporteActivo?.id}
             areaActiva={usaBackend ? areaActiva : ''}
             onEnviar={enviarPregunta}
-            onAdjuntar={importarArchivo}
+            onAdjuntar={usaBackend ? null : importarArchivo}
             onVerReporte={abrirReporte}
             onNuevoChat={nuevoChat}
           />

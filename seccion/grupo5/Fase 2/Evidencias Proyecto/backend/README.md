@@ -53,7 +53,32 @@ Python convierte ese plan en SQL. Así:
 | `app/consultas.py` | Reglas previas, validación del plan y del dominio, armado del SQL (serie del gráfico, total y detalle) |
 | `app/db.py` | Conexión a SQL Server (pyodbc): seguridad, metadatos, ejecución como `bi_lector` y traza |
 | `app/claves.py` / `app/sesion.py` | Hash de contraseñas (PBKDF2-SHA256 con sal) y token de sesión firmado |
+| `app/analisis.py` | Comparación con el período anterior o el año anterior (solo métricas que lo permiten) y proyección por regresión lineal con meses atípicos |
 | `db/sqlserver/15–17_*.sql` | **Propuesta para la BD** (siguen la numeración de `Fase 3/database`): tabla de traza `seguridad.SEG_LOG_CONSULTA`, usuario de solo lectura `bi_lector` y contraseñas (hash) de los usuarios |
+| `db/sqlserver/25_CREATE_DASHBOARDS.sql` | Schema `app`: carpetas compartidas, miembros (LECTOR / EDITOR) y dashboards guardados (RF-022) |
+| `db/sqlserver/26_DASHBOARD_PERMISO.sql` | Permiso por dashboard: un miembro puede tener en un dashboard un rol distinto al de la carpeta |
+
+## Comparación de períodos y proyección
+
+Cada métrica del catálogo dice si se puede comparar (`Medida.comparable` en `catalogo.py`):
+
+| Valor | Significado | Ejemplos |
+|---|---|---|
+| `si` | Mide lo ocurrido en el período: se compara y se proyecta | Cantidad de siniestros, primas netas, pólizas emitidas |
+| `advertencia` | Se compara, con una nota, pero no se proyecta | Monto pagado y recuperado (los siniestros recientes aún reciben pagos), cuotas pagadas |
+| `no` | Refleja el estado de hoy: no se compara ni se proyecta, y se explica por qué | Monto en reserva, cuotas pendientes y vencidas |
+
+Filtrar o agrupar por un estado (del siniestro, de la cuota o de la póliza) agrega una advertencia, porque es el estado de hoy. La proyección (3 meses) usa solo meses completos, necesita al menos 6, excluye de la recta los meses atípicos y no se calcula para cuotas, porque las futuras ya están programadas. Estas reglas son de negocio: el responsable de datos debe validarlas.
+
+### Módulo "Proyecciones" (menú lateral)
+
+`GET /api/proyecciones` lista las series que el usuario puede proyectar (solo métricas `si`, de sus áreas, y nunca cuotas). Las recomendadas van primero, con la decisión que apoyan (`catalogo.PROYECCIONES`): cantidad de siniestros y monto denunciado, prima directa y retenida neta, y pólizas emitidas y monto asegurado. `POST /api/proyecciones` arma el plan en el backend (toda la historia, por mes) y devuelve la serie con su proyección; desde el módulo se puede agregar al reporte del chat y guardarla en un dashboard.
+
+## Dashboards compartidos
+
+Un dashboard guarda los **planes** de sus gráficos, no los datos. Al abrirlo, el backend vuelve a ejecutar cada plan con los permisos de quien lo mira: si un gráfico es de un área que esa persona no puede consultar, se muestra bloqueado. Las carpetas funcionan como repositorios: el propietario agrega miembros como lector o editor, y `NUM_VERSION` evita que dos editores se pisen los cambios.
+
+El propietario también puede dar a un miembro un rol distinto en un dashboard puntual (botón **Permisos** del dashboard): por ejemplo, un lector de la carpeta que edita solo "Siniestros Q4". Quitar a alguien de la carpeta borra esas excepciones.
 
 ## Cómo correrlo
 
@@ -100,6 +125,7 @@ Python convierte ese plan en SQL. Así:
 
    En la BD solo se guarda el hash de la clave (`DESC_CLAVE_HASH`), nunca la clave. Para cambiar una: `python -m app.claves "nueva clave"` y actualizar esa columna con el resultado.
    Para recuperar contraseñas por correo: ejecutar `db/sqlserver/22_RECUPERACION_CLAVE.sql`, registrar el correo de cada usuario en `seguridad.SEG_USUARIO.DESC_CORREO` y completar las variables `SMTP_*` de `.env`. Sin `SMTP_HOST`, el enlace se muestra en la consola del backend.
+   Para guardar y compartir dashboards: ejecutar `db/sqlserver/25_CREATE_DASHBOARDS.sql` y luego `26_DASHBOARD_PERMISO.sql`.
    El login entrega un token firmado (8 horas). El backend saca el usuario de ese token, no de lo que mande el navegador, así que nadie puede hacerse pasar por `USR_ADMIN`.
    Sin `VITE_API_URL`, el frontend sigue funcionando en modo demo con las reglas locales de `src/lib/copilot.js`.
 
@@ -128,4 +154,4 @@ Los tokens reales de cada consulta quedan en `seguridad.SEG_LOG_CONSULTA` (`NUM_
 1. Cambiar la clave de demostración `1234` y definir `SESSION_SECRET` antes de mostrar el sistema fuera del equipo.
 2. Endpoints `GET/POST /api/conversaciones` para guardar el historial de chats en la BD en vez de localStorage.
 3. `POST /api/importaciones` para que el Excel se guarde en la BD (hoy queda en el navegador).
-4. Que la regresión lineal y el Excel importado usen los datos de la BD (hoy usan los datos de prueba del navegador).
+4. Que el Excel importado se guarde en la BD (hoy, en modo demo, queda en el navegador).

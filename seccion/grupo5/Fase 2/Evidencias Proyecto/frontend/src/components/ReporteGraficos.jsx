@@ -1,8 +1,11 @@
 import { useRef, useState } from 'react'
-import { Download, FileBarChart2, Maximize2, Minimize2, MousePointerClick, Pencil, TableProperties, X } from 'lucide-react'
+import { Download, FileBarChart2, Maximize2, Minimize2, MousePointerClick, Pencil, Save, TableProperties, X } from 'lucide-react'
 import { GraficoPrincipal } from './DashboardPanel.jsx'
+import ModalGuardarDashboard from './ModalGuardarDashboard.jsx'
 import ReporteBD from './ReporteBD.jsx'
+import ResumenAnalisis from './ResumenAnalisis.jsx'
 import { descargarReporte } from '../lib/api.js'
+import { comparacionActiva } from '../lib/analisis.js'
 import './DashboardPanel.css'
 import './ReporteGraficos.css'
 
@@ -51,7 +54,9 @@ function TituloEditable({ titulo, onGuardar }) {
 const ALTO_EN_GRILLA = 340
 const ALTO_AMPLIADO = 460
 
-function TarjetaGrafico({ reporte, activo, onSeleccionar, onQuitar }) {
+// También la usa VistaDashboard (dashboards guardados). `controles` agrega botones
+// propios a la cabecera; sin onSeleccionar u onQuitar esos botones no se muestran.
+export function TarjetaGrafico({ reporte, activo = false, onSeleccionar, onQuitar, controles = null }) {
   const [ampliado, setAmpliado] = useState(false)
   const { interpretacion: i, resultado: r } = reporte
   const sinAgrupar = i.agruparPor === 'ninguno' || r.serie.length === 0
@@ -64,6 +69,7 @@ function TarjetaGrafico({ reporte, activo, onSeleccionar, onQuitar }) {
     ...i.filtros.map((f) => f.valor),
     ...(i.desde || i.hasta ? [`${i.desde ?? '…'} a ${i.hasta ?? '…'}`] : []),
   ]
+  const comparacion = comparacionActiva(r)
   return (
     <article className={`chart-card reporte-grafico ${activo ? 'reporte-grafico-activo' : ''} ${ampliado ? 'reporte-grafico-ampliado' : ''} ${esMapa ? 'reporte-grafico-mapa' : ''}`}>
       <header className="reporte-grafico-cabecera">
@@ -73,17 +79,22 @@ function TarjetaGrafico({ reporte, activo, onSeleccionar, onQuitar }) {
           <p>{i.metricaEtiqueta}{sinAgrupar ? '' : ` por ${i.dimensionEtiqueta.toLowerCase()}`}{chips.length > 0 ? ` · ${chips.join(' · ')}` : ''}</p>
         </div>
         <div className="reporte-grafico-acciones">
+          {controles}
           {!esMapa && (
             <button type="button" title={ampliado ? 'Reducir' : 'Ampliar a todo el ancho'} aria-label={ampliado ? 'Reducir gráfico' : 'Ampliar gráfico'} onClick={() => setAmpliado((v) => !v)}>
               {ampliado ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
             </button>
           )}
-          <button type="button" title="Ver datos y filtrar este gráfico" aria-label="Ver datos y filtrar este gráfico" aria-pressed={activo} onClick={() => onSeleccionar(reporte)}>
-            <TableProperties size={14} />
-          </button>
-          <button type="button" title="Quitar del reporte" aria-label="Quitar gráfico del reporte" onClick={() => onQuitar(reporte)}>
-            <X size={15} />
-          </button>
+          {onSeleccionar && (
+            <button type="button" title="Ver datos, filtrar y comparar este gráfico" aria-label="Ver datos, filtrar y comparar este gráfico" aria-pressed={activo} onClick={() => onSeleccionar(reporte)}>
+              <TableProperties size={14} />
+            </button>
+          )}
+          {onQuitar && (
+            <button type="button" title="Quitar del reporte" aria-label="Quitar gráfico del reporte" onClick={() => onQuitar(reporte)}>
+              <X size={15} />
+            </button>
+          )}
         </div>
       </header>
       {r.cantidad === 0
@@ -98,8 +109,11 @@ function TarjetaGrafico({ reporte, activo, onSeleccionar, onQuitar }) {
             unidad="registros"
             compacto={!ampliado}
             altura={ampliado ? ALTO_AMPLIADO : ALTO_EN_GRILLA}
+            comparacion={comparacion}
+            proyeccion={r.proyeccion?.omitida ? null : r.proyeccion}
           />
         )}
+      <ResumenAnalisis resultado={r} esMoneda={i.moneda} />
     </article>
   )
 }
@@ -110,6 +124,7 @@ export default function ReporteGraficos({
   titulo, reportes, activo, filtros, actualizando, onSeleccionar, onQuitar, onRenombrar, onSesionExpirada,
 }) {
   const [exportando, setExportando] = useState({ formato: null, error: '' })
+  const [guardando, setGuardando] = useState(false)
   const seleccionado = activo?.esVistaArea ? activo : reportes.find((r) => r.id === activo?.id) ?? reportes.at(-1)
 
   async function exportar(formato) {
@@ -137,7 +152,10 @@ export default function ReporteGraficos({
         </div>
         <div className="reporte-exportar">
           <div className="reporte-exportar-botones">
-            <button type="button" className="btn-powerbi" onClick={() => exportar('html')} disabled={Boolean(exportando.formato)}>
+            <button type="button" className="btn-powerbi" onClick={() => setGuardando(true)}>
+              <Save size={15} /> Guardar como dashboard
+            </button>
+            <button type="button" className="btn-powerbi btn-exportar-secundario" onClick={() => exportar('html')} disabled={Boolean(exportando.formato)}>
               <MousePointerClick size={15} /> {exportando.formato === 'html' ? 'Generando…' : 'Descargar HTML interactivo'}
             </button>
             <button type="button" className="btn-powerbi btn-exportar-secundario" onClick={() => exportar('powerbi')} disabled={Boolean(exportando.formato)}>
@@ -161,6 +179,15 @@ export default function ReporteGraficos({
       </div>
 
       <ReporteBD reporte={seleccionado} actualizando={actualizando} mostrarGrafico={false} />
+
+      {guardando && (
+        <ModalGuardarDashboard
+          nombreInicial={titulo}
+          graficos={reportes.map((r) => ({ titulo: r.pregunta.slice(0, 200), plan: r.plan }))}
+          onCerrar={() => setGuardando(false)}
+          onSesionExpirada={onSesionExpirada}
+        />
+      )}
     </div>
   )
 }

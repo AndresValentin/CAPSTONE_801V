@@ -1,8 +1,9 @@
 import { ESTILO_TOOLTIP } from '../lib/graficos.js'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  LineChart, Line, PieChart, Pie, Cell, Legend,
+  ComposedChart, Line, Area, Scatter, PieChart, Pie, Cell, Legend,
 } from 'recharts'
+import { sentidoVariacion, serieConAnalisis, textoVariacion } from '../lib/analisis.js'
 import { LayoutDashboard, FileStack, CircleDollarSign, TrendingUp } from 'lucide-react'
 import {
   METRICAS, DIMENSIONES, VISUALIZACIONES, agregarPor, completarReporte, totalMetrica,
@@ -10,6 +11,7 @@ import {
 import { formatCLP, formatCLPCorto, formatMetrica } from '../lib/formato.js'
 import MapaChile from './MapaChile.jsx'
 import './DashboardPanel.css'
+import './ResumenAnalisis.css'
 
 // Paleta validada para contraste y daltonismo. El color nunca se repite: si hay
 // más categorías que colores, las menores se agrupan en "Otros".
@@ -28,23 +30,46 @@ function agruparOtros(serie) {
 }
 
 // También lo usa ReporteBD para dibujar los reportes que vienen del backend, y
-// ReporteGraficos con `compacto` para que quepan varios gráficos en pantalla
-export function GraficoPrincipal({ visualizacion, serie, total, esMoneda, cantidad, unidad = 'siniestros', compacto = false, altura }) {
+// ReporteGraficos con `compacto` para que quepan varios gráficos en pantalla.
+// `comparacion` y `proyeccion` vienen calculadas del backend (solo si son válidas).
+export function GraficoPrincipal({
+  visualizacion, serie, total, esMoneda, cantidad, unidad = 'siniestros', compacto = false, altura,
+  comparacion = null, proyeccion = null,
+}) {
   const fmt = (v) => formatMetrica(v, esMoneda)
+  const fmtTooltip = (v) => {
+    if (Array.isArray(v)) return `${fmt(v[0])} – ${fmt(v[1])}`
+    return v === null || v === undefined ? '—' : fmt(v)
+  }
   const fmtEje = (v) => (esMoneda ? formatCLPCorto(v) : v)
   const alto = altura ?? (compacto ? 240 : 300)
   // En una grilla de varios gráficos la animación solo distrae al redimensionar
   const animar = !compacto && altura === undefined
   const radioExterior = Math.round(alto * 0.36)
+  const conAnterior = Boolean(comparacion)
+  const proyecta = Boolean(proyeccion?.meses?.length)
+  const leyenda = (conAnterior || proyecta) && (
+    <Legend
+      iconType="plainline"
+      wrapperStyle={{ fontSize: 12 }}
+      formatter={(nombre) => <span style={{ color: 'var(--color-text)' }}>{nombre}</span>}
+    />
+  )
 
   if (visualizacion === 'mapa') {
     return <MapaChile serie={serie} esMoneda={esMoneda} altura={Math.max(alto, 560)} />
   }
 
   if (visualizacion === 'kpi') {
+    const sentido = conAnterior ? sentidoVariacion(comparacion.variacion, comparacion.mejorSiBaja) : null
     return (
       <div className="report-kpi">
         <span className="report-kpi-value">{fmt(total)}</span>
+        {sentido && (
+          <span className={`report-kpi-variacion ${sentido.clase}`}>
+            {sentido.flecha} {textoVariacion(comparacion.variacion)} frente a {fmt(comparacion.total)}
+          </span>
+        )}
         <span className="report-kpi-caption">calculado sobre {cantidad} {unidad}</span>
       </div>
     )
@@ -56,7 +81,10 @@ export function GraficoPrincipal({ visualizacion, serie, total, esMoneda, cantid
       <div className="table-scroll">
         <table>
           <thead>
-            <tr><th>Categoría</th><th className="num">Valor</th><th className="num">% del total</th></tr>
+            <tr>
+              <th>Categoría</th><th className="num">Valor</th><th className="num">% del total</th>
+              {conAnterior && <><th className="num">Anterior</th><th className="num">Variación</th></>}
+            </tr>
           </thead>
           <tbody>
             {serie.map((f) => (
@@ -64,6 +92,12 @@ export function GraficoPrincipal({ visualizacion, serie, total, esMoneda, cantid
                 <td>{f.categoria}</td>
                 <td className="num">{fmt(f.valor)}</td>
                 <td className="num">{suma ? ((f.valor / suma) * 100).toFixed(1) : 0}%</td>
+                {conAnterior && (
+                  <>
+                    <td className="num">{fmtTooltip(f.anterior)}</td>
+                    <td className="num">{f.anterior ? textoVariacion(((f.valor - f.anterior) / Math.abs(f.anterior)) * 100) : '—'}</td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>
@@ -104,24 +138,38 @@ export function GraficoPrincipal({ visualizacion, serie, total, esMoneda, cantid
   }
 
   if (visualizacion === 'lineas') {
+    const datos = serieConAnalisis(serie, proyeccion)
     return (
       <ResponsiveContainer width="100%" height={alto}>
-        <LineChart data={serie} margin={{ top: 10, right: 16, left: 8, bottom: 0 }}>
+        <ComposedChart data={datos} margin={{ top: 10, right: 16, left: 8, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
           <XAxis dataKey="categoria" tick={{ fontSize: 12, fill: 'var(--color-text-muted)' }} tickLine={false} minTickGap={24} />
           <YAxis tick={{ fontSize: 12, fill: 'var(--color-text-muted)' }} tickFormatter={fmtEje} allowDecimals={false} tickLine={false} axisLine={false} width={compacto ? 62 : 60} />
-          <Tooltip {...ESTILO_TOOLTIP} formatter={(v) => fmt(v)} />
+          <Tooltip {...ESTILO_TOOLTIP} formatter={fmtTooltip} />
+          {leyenda}
+          {proyecta && (
+            <Area dataKey="rango" name="Rango probable" stroke="none" fill="var(--chart-proyeccion)" fillOpacity={0.16} isAnimationActive={false} legendType="none" />
+          )}
+          {conAnterior && (
+            <Line type="monotone" dataKey="anterior" name={comparacion.titulo} stroke="var(--serie-otros)" strokeWidth={2} strokeDasharray="2 4" dot={false} connectNulls isAnimationActive={animar} />
+          )}
           <Line
             type="monotone"
             dataKey="valor"
-            name="Valor"
+            name={conAnterior ? 'Período actual' : 'Valor'}
             stroke="var(--chart-linea)"
             strokeWidth={2}
             dot={serie.length > 18 ? false : { r: 4 }}
             activeDot={{ r: 5 }}
             isAnimationActive={animar}
           />
-        </LineChart>
+          {proyecta && (
+            <Line type="linear" dataKey="proyectado" name="Proyección" stroke="var(--chart-proyeccion)" strokeWidth={2} strokeDasharray="6 4" dot={{ r: 3 }} connectNulls={false} isAnimationActive={false} />
+          )}
+          {proyecta && proyeccion.anomalias.length > 0 && (
+            <Scatter dataKey="atipico" name="Mes atípico" fill="var(--color-danger)" shape="diamond" legendType="diamond" isAnimationActive={false} />
+          )}
+        </ComposedChart>
       </ResponsiveContainer>
     )
   }
@@ -134,8 +182,10 @@ export function GraficoPrincipal({ visualizacion, serie, total, esMoneda, cantid
           <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" horizontal={false} />
           <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickFormatter={fmtEje} tickLine={false} axisLine={false} allowDecimals={false} />
           <YAxis type="category" dataKey="categoria" tick={{ fontSize: 11, fill: 'var(--color-text-muted)' }} tickLine={false} width={118} interval={0} />
-          <Tooltip {...ESTILO_TOOLTIP} formatter={(v) => fmt(v)} cursor={{ fill: 'var(--chart-cursor)' }} />
-          <Bar dataKey="valor" name="Valor" fill="var(--chart-barra)" radius={[0, 4, 4, 0]} maxBarSize={30} isAnimationActive={false} />
+          <Tooltip {...ESTILO_TOOLTIP} formatter={fmtTooltip} cursor={{ fill: 'var(--chart-cursor)' }} />
+          {leyenda}
+          <Bar dataKey="valor" name={conAnterior ? 'Período actual' : 'Valor'} fill="var(--chart-barra)" radius={[0, 4, 4, 0]} maxBarSize={30} isAnimationActive={false} />
+          {conAnterior && <Bar dataKey="anterior" name={comparacion.titulo} fill="var(--serie-otros)" radius={[0, 4, 4, 0]} maxBarSize={30} isAnimationActive={false} />}
         </BarChart>
       </ResponsiveContainer>
     )
@@ -147,8 +197,10 @@ export function GraficoPrincipal({ visualizacion, serie, total, esMoneda, cantid
         <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
         <XAxis dataKey="categoria" tick={{ fontSize: 12, fill: 'var(--color-text-muted)' }} tickLine={false} />
         <YAxis tick={{ fontSize: 12, fill: 'var(--color-text-muted)' }} tickFormatter={fmtEje} allowDecimals={false} tickLine={false} axisLine={false} />
-        <Tooltip {...ESTILO_TOOLTIP} formatter={(v) => fmt(v)} cursor={{ fill: 'var(--chart-cursor)' }} />
-        <Bar dataKey="valor" name="Valor" fill="var(--chart-barra)" radius={[6, 6, 0, 0]} maxBarSize={56} isAnimationActive={animar} />
+        <Tooltip {...ESTILO_TOOLTIP} formatter={fmtTooltip} cursor={{ fill: 'var(--chart-cursor)' }} />
+        {leyenda}
+        <Bar dataKey="valor" name={conAnterior ? 'Período actual' : 'Valor'} fill="var(--chart-barra)" radius={[6, 6, 0, 0]} maxBarSize={56} isAnimationActive={animar} />
+        {conAnterior && <Bar dataKey="anterior" name={comparacion.titulo} fill="var(--serie-otros)" radius={[6, 6, 0, 0]} maxBarSize={56} isAnimationActive={animar} />}
       </BarChart>
     </ResponsiveContainer>
   )

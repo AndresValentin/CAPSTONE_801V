@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
-import { SquarePen, Search, Trash2, FileUp, BrainCircuit, ChevronDown, MessageSquare } from 'lucide-react'
+import { SquarePen, Search, Trash2, FileUp, BrainCircuit, ChevronDown, MessageSquare, LineChart } from 'lucide-react'
 import { reportesDe } from '../hooks/useConversaciones.js'
+import { resumenProyeccion, useProyecciones } from '../hooks/useProyecciones.js'
+import ProyeccionesPanel from './ProyeccionesPanel.jsx'
 import { resumenPorMes } from '../data/mockData.js'
 import { proyectarMonto } from '../lib/regression.js'
 import { formatCLPCorto } from '../lib/formato.js'
@@ -49,10 +51,11 @@ function Modulo({ icono: Icono, titulo, resumen, abierto, onToggle, children }) 
 
 export default function Sidebar({
   abierto, conversaciones, activaId, onSeleccionarConversacion, onNuevoChat, onEliminarConversacion,
-  onImportar, totalImportados, onLimpiarImportados, datos, sesion, onSalir,
+  onImportar, totalImportados, onLimpiarImportados, datos, sesion, onSalir, modoDemo = true, onVerProyeccion,
 }) {
   const [busqueda, setBusqueda] = useState('')
-  const [moduloAbierto, setModuloAbierto] = useState(null) // 'importar' | 'ml' | null
+  const [moduloAbierto, setModuloAbierto] = useState(null) // 'importar' | 'ml' | 'proyecciones' | null
+  const proyecciones = useProyecciones(onSalir)
 
   const filtradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
@@ -63,6 +66,7 @@ export default function Sidebar({
 
   function alternar(modulo) {
     setModuloAbierto((actual) => (actual === modulo ? null : modulo))
+    if (modulo === 'proyecciones') proyecciones.iniciar()
   }
 
   return (
@@ -111,7 +115,24 @@ export default function Sidebar({
         ))}
       </nav>
 
-      <div className="sb-modules">
+      {/* Con backend: proyección por regresión lineal sobre la serie mensual real de SQL
+          Server (backend/app/analisis.py). */}
+      {!modoDemo && (
+        <div className="sb-modules">
+          <Modulo
+            icono={LineChart}
+            titulo="Proyecciones"
+            resumen={resumenProyeccion(proyecciones)}
+            abierto={moduloAbierto === 'proyecciones'}
+            onToggle={() => alternar('proyecciones')}
+          >
+            <ProyeccionesPanel p={proyecciones} onVerEnReporte={onVerProyeccion} />
+          </Modulo>
+        </div>
+      )}
+
+      {/* Solo en modo demo: trabajan sobre los datos de ejemplo del navegador */}
+      {modoDemo && <div className="sb-modules">
         <Modulo
           icono={FileUp}
           titulo="Importar Excel"
@@ -131,7 +152,7 @@ export default function Sidebar({
         >
           <MLPanel analisis={analisis} />
         </Modulo>
-      </div>
+      </div>}
 
       <PerfilMenu sesion={sesion} onSalir={onSalir} />
     </aside>

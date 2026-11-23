@@ -14,9 +14,11 @@ Hay dos partes:
 import time
 from dataclasses import dataclass, field
 
+import pyodbc
+
 from . import db
 
-VERSION = "catalogo-v0.8"
+VERSION = "catalogo-v0.9"
 
 Columna = tuple[str, str]  # (tabla, columna) tal como aparecen en meta.MET_COLUMNA
 
@@ -27,6 +29,11 @@ class Medida:
     sql: str
     columnas: tuple[Columna, ...] = ()
     moneda: bool = False
+    # Si tiene sentido compararla con otro período y proyectarla (ver analisis.py):
+    # "si", "advertencia" (se compara, con una nota) o "no" (refleja el estado de hoy).
+    comparable: str = "si"
+    nota: str = ""
+    mejor_si_baja: bool = False  # para pintar una variación como buena o mala
 
 
 @dataclass(frozen=True)
@@ -34,6 +41,7 @@ class Atributo:
     etiqueta: str
     columna: Columna
     moneda: bool = False  # solo para columnas de detalle con montos
+    estado_actual: bool = False  # guarda el estado de hoy, no el que tenía en el pasado
 
 
 @dataclass(frozen=True)
@@ -54,6 +62,8 @@ class DefinicionDominio:
     atributos: dict[str, Atributo]   # sirven para agrupar y para filtrar
     detalle: tuple[Atributo, ...]    # columnas de la tabla de detalle del reporte
     permiso: str | None = None       # dominio de seguridad que da acceso, si no es el propio
+    # Por qué no se proyecta la serie mensual del dominio ("" = sí se proyecta)
+    sin_proyeccion: str = ""
 
 
 SIN, FIN, SEG = "ODS_SIN_SINIESTRO", "ODS_FIN_PRIMA", "ODS_SEG_SEGURO"
@@ -80,13 +90,22 @@ def _medida_prima(etiqueta: str, columna: str) -> Medida:
     )
 
 
-def _medida_cuota(etiqueta: str, condicion: str) -> Medida:
+def _medida_cuota(etiqueta: str, condicion: str, **reglas) -> Medida:
     return Medida(
         etiqueta,
         f"SUM(CASE WHEN {condicion} THEN {{CUOTA}}.MNT_CUOTA ELSE 0 END)",
         ((CUOTA, "MNT_CUOTA"), (CUOTA, "DESC_ESTADO_CUOTA"), (CUOTA, "DT_FECHA_VENCIMIENTO")),
         True,
+        **reglas,
     )
+
+
+# Reglas de negocio para comparar períodos (validar con el responsable de datos)
+_MADURACION_PAGOS = ("Los siniestros recientes aún pueden recibir pagos, así que el período más "
+                     "reciente tiende a verse menor.")
+_SALDO_RESERVA = ("Es el saldo de hoy: los siniestros antiguos ya se cerraron y su reserva bajó, "
+                  "así que compararla con otro período lleva a una conclusión falsa.")
+_EMITIDO = "Cuenta lo emitido en cada período (ventas nuevas), no la cartera vigente."
 
 
 DEFINICIONES: dict[str, DefinicionDominio] = {
@@ -95,16 +114,22 @@ DEFINICIONES: dict[str, DefinicionDominio] = {
         uniones=(Union(SEG, "ID_ITEM", "ID_ITEM"),),
         fecha=Atributo("Fecha de ocurrencia", (SIN, "DT_FECHA_OCURRENCIA")),
         medidas={
-            "cantidad_siniestros": Medida("Cantidad de siniestros", "COUNT(*)"),
-            "monto_pagado": Medida("Monto pagado", "SUM({SIN}.MNT_PAGADO)", ((SIN, "MNT_PAGADO"),), True),
-            "monto_pagado_promedio": Medida("Monto pagado promedio", "AVG({SIN}.MNT_PAGADO)", ((SIN, "MNT_PAGADO"),), True),
-            "monto_denunciado": Medida("Monto denunciado", "SUM({SIN}.MNT_DENUNCIADO)", ((SIN, "MNT_DENUNCIADO"),), True),
-            "monto_reserva": Medida("Monto en reserva", "SUM({SIN}.MNT_RESERVA)", ((SIN, "MNT_RESERVA"),), True),
-            "monto_recuperado": Medida("Monto recuperado", "SUM({SIN}.MNT_RECUPERADO)", ((SIN, "MNT_RECUPERADO"),), True),
+            "cantidad_siniestros": Medida("Cantidad de siniestros", "COUNT(*)", mejor_si_baja=True),
+            "monto_pagado": Medida("Monto pagado", "SUM({SIN}.MNT_PAGADO)", ((SIN, "MNT_PAGADO"),), True,
+                                   comparable="advertencia", nota=_MADURACION_PAGOS, mejor_si_baja=True),
+            "monto_pagado_promedio": Medida("Monto pagado promedio", "AVG({SIN}.MNT_PAGADO)", ((SIN, "MNT_PAGADO"),), True,
+                                            comparable="advertencia", nota=_MADURACION_PAGOS, mejor_si_baja=True),
+            "monto_denunciado": Medida("Monto denunciado", "SUM({SIN}.MNT_DENUNCIADO)", ((SIN, "MNT_DENUNCIADO"),), True,
+                                       mejor_si_baja=True),
+            "monto_reserva": Medida("Monto en reserva", "SUM({SIN}.MNT_RESERVA)", ((SIN, "MNT_RESERVA"),), True,
+                                    comparable="no", nota=_SALDO_RESERVA, mejor_si_baja=True),
+            "monto_recuperado": Medida("Monto recuperado", "SUM({SIN}.MNT_RECUPERADO)", ((SIN, "MNT_RECUPERADO"),), True,
+                                       comparable="advertencia",
+                                       nota="Los recuperos llegan meses después del siniestro: el período más reciente tiende a verse menor."),
         },
         atributos={
             "tipo_siniestro": Atributo("Tipo de siniestro", (SIN, "DESC_TIPO_SINIESTRO")),
-            "estado_siniestro": Atributo("Estado del siniestro", (SIN, "DESC_ESTADO_SINIESTRO")),
+            "estado_siniestro": Atributo("Estado del siniestro", (SIN, "DESC_ESTADO_SINIESTRO"), estado_actual=True),
             "producto": _PRODUCTO,
             "region": _REGION,
         },
@@ -157,14 +182,16 @@ DEFINICIONES: dict[str, DefinicionDominio] = {
         uniones=(Union(CLIENTE, "ID_CLIENTE", "ID_CLIENTE"),),
         fecha=Atributo("Fecha de emisión", (SEG, "DT_FECHA_EMISION")),
         medidas={
-            "cantidad_items": Medida("Cantidad de ítems asegurados", "COUNT(*)"),
-            "cantidad_polizas": Medida("Cantidad de pólizas", "COUNT(DISTINCT {SEG}.COD_POLIZA)", ((SEG, "COD_POLIZA"),)),
-            "monto_asegurado": Medida("Monto asegurado", "SUM({SEG}.MNT_MONTO_ASEGURADO)", ((SEG, "MNT_MONTO_ASEGURADO"),), True),
+            "cantidad_items": Medida("Cantidad de ítems asegurados", "COUNT(*)", nota=_EMITIDO),
+            "cantidad_polizas": Medida("Cantidad de pólizas", "COUNT(DISTINCT {SEG}.COD_POLIZA)", ((SEG, "COD_POLIZA"),),
+                                       nota=_EMITIDO),
+            "monto_asegurado": Medida("Monto asegurado", "SUM({SEG}.MNT_MONTO_ASEGURADO)", ((SEG, "MNT_MONTO_ASEGURADO"),), True,
+                                      nota=_EMITIDO),
         },
         atributos={
             "producto": _PRODUCTO,
             "region": _REGION,
-            "estado_poliza": Atributo("Estado de la póliza", (SEG, "DESC_ESTADO_POLIZA")),
+            "estado_poliza": Atributo("Estado de la póliza", (SEG, "DESC_ESTADO_POLIZA"), estado_actual=True),
             "segmento": Atributo("Segmento del cliente", (CLIENTE, "DESC_SEGMENTO")),
             "tipo_cliente": Atributo("Tipo de cliente", (CLIENTE, "DESC_TIPO_CLIENTE")),
         },
@@ -183,6 +210,7 @@ DEFINICIONES: dict[str, DefinicionDominio] = {
     "CUO": DefinicionDominio(
         tabla=CUOTA,
         permiso="FIN",
+        sin_proyeccion="Las cuotas de los próximos meses ya están programadas: no hace falta proyectarlas.",
         uniones=(
             Union(FIN, "ID_MOVIMIENTO_PRIMA", "ID_MOVIMIENTO_PRIMA"),
             Union(SEG, "ID_ITEM", "ID_ITEM", origen=FIN),
@@ -190,16 +218,26 @@ DEFINICIONES: dict[str, DefinicionDominio] = {
         fecha=Atributo("Fecha de vencimiento", (CUOTA, "DT_FECHA_VENCIMIENTO")),
         medidas={
             "monto_cuotas": Medida("Monto total de cuotas", "SUM({CUOTA}.MNT_CUOTA)", ((CUOTA, "MNT_CUOTA"),), True),
-            "monto_cuotas_pagadas": _medida_cuota("Monto de cuotas pagadas", "{CUOTA}.DESC_ESTADO_CUOTA = 'PAGADA'"),
-            "monto_cuotas_pendientes": _medida_cuota("Monto de cuotas pendientes", "{CUOTA}.DESC_ESTADO_CUOTA = 'PENDIENTE'"),
+            "monto_cuotas_pagadas": _medida_cuota(
+                "Monto de cuotas pagadas", "{CUOTA}.DESC_ESTADO_CUOTA = 'PAGADA'",
+                comparable="advertencia",
+                nota="Algunas cuotas se pagan tarde: el período más reciente tiende a verse menor.",
+            ),
+            "monto_cuotas_pendientes": _medida_cuota(
+                "Monto de cuotas pendientes", "{CUOTA}.DESC_ESTADO_CUOTA = 'PENDIENTE'",
+                comparable="no", mejor_si_baja=True,
+                nota="Usa el estado de hoy: el período anterior no muestra lo que estaba pendiente en esa fecha.",
+            ),
             "monto_cuotas_vencidas": _medida_cuota(
                 "Monto de cuotas vencidas sin pagar",
                 "{CUOTA}.DESC_ESTADO_CUOTA = 'PENDIENTE' AND {CUOTA}.DT_FECHA_VENCIMIENTO < CAST(GETDATE() AS DATE)",
+                comparable="no", mejor_si_baja=True,
+                nota="Se calcula con la fecha de hoy: el período anterior no muestra la morosidad que existía en ese momento.",
             ),
             "cantidad_cuotas": Medida("Cantidad de cuotas", "COUNT(*)"),
         },
         atributos={
-            "estado_cuota": Atributo("Estado de la cuota", (CUOTA, "DESC_ESTADO_CUOTA")),
+            "estado_cuota": Atributo("Estado de la cuota", (CUOTA, "DESC_ESTADO_CUOTA"), estado_actual=True),
             "producto": _PRODUCTO,
             "region": _REGION,
         },
@@ -266,6 +304,31 @@ RECOMENDACIONES: dict[str, tuple[Recomendacion, ...]] = {
         Recomendacion("Monto de cuotas pagadas por mes de vencimiento en líneas", "monto_cuotas_pagadas", MES, "Muestra la tendencia de la cobranza"),
     ),
 }
+
+# Series que conviene proyectar (módulo "Proyecciones"), con la decisión que apoyan.
+# Las demás métricas proyectables también se ofrecen, sin recomendación.
+PROYECCIONES: dict[str, dict[str, str]] = {
+    "SIN": {
+        "cantidad_siniestros": "Anticipa cuántos siniestros llegarán: carga de trabajo de liquidación y reservas por constituir.",
+        "monto_denunciado": "Anticipa el costo que se denunciará en los próximos meses.",
+    },
+    "FIN": {
+        "prima_total": "Estima los ingresos por primas del próximo trimestre, ya descontadas las anulaciones.",
+        "prima_retenida": "Estima la prima que queda en la compañía después del reaseguro.",
+    },
+    "SEG": {
+        "cantidad_polizas": "Ritmo de ventas nuevas: pólizas emitidas por mes.",
+        "monto_asegurado": "Exposición nueva que se sumará a la cartera cada mes.",
+    },
+}
+
+
+def proyectable(dominio: "DominioDisponible", clave: str) -> bool:
+    """Misma regla que analisis.proyectar: serie mensual de un flujo, sin advertencias."""
+    medida = dominio.medidas.get(clave)
+    return bool(medida and dominio.con_fecha and dominio.rango_meses and medida.comparable == "si"
+                and not dominio.definicion.sin_proyeccion)
+
 
 # Datos personales que nunca se exponen, existan o no en la BD (RN-06 / RF-03)
 CAMPOS_SENSIBLES = ["rut", "correo", "email", "telefono", "tarjeta", "nombre del cliente", "direccion"]
@@ -412,5 +475,17 @@ def obtener() -> Catalogo:
     se refleja sin reiniciar el backend."""
     global _cache
     if _cache is None or time.monotonic() - _cache[0] > _DURACION_CACHE:
-        _cache = (time.monotonic(), _cargar())
+        try:
+            nuevo = _cargar()
+        except pyodbc.Error:
+            if _cache is None:
+                raise
+            # Si la BD falla al recargar, se sigue con el catálogo anterior y se
+            # reintenta en un minuto, en vez de botar todas las consultas
+            print("[catalogo] no se pudo recargar; se usa el anterior", flush=True)
+            _cache = (time.monotonic() - _DURACION_CACHE + 60, _cache[1])
+            return _cache[1]
+        # La hora se toma al terminar: con una BD lenta, la carga podía durar más que
+        # el propio caché y el catálogo nacía vencido
+        _cache = (time.monotonic(), nuevo)
     return _cache[1]
