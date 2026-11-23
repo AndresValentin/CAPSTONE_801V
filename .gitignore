@@ -1,0 +1,18 @@
+# Secretos: nunca se suben
+.env
+.env.*
+!.env.example
+
+# Entornos y dependencias
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+
+# Builds y bases locales
+dist/
+*.db
+
+# Copias viejas del proyecto antes de moverlo a "Evidencias de sistema/RootSmart"
+seccion/grupo5/Fase 2/Evidencias Proyecto/backend/
+seccion/grupo5/Fase 2/Evidencias Proyecto/frontend/
