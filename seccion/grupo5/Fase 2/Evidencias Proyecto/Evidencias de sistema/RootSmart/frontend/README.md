@@ -1,16 +1,37 @@
-# React + Vite
+# RootSmart — Frontend (React + Vite)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Interfaz web de RootSmart: inicio de sesión, chat con el copiloto, dashboards con gráficos y mapa de Chile, filtros que se recalculan sin IA, proyecciones, carpetas y dashboards compartidos, y administración de usuarios y solicitudes de acceso.
 
-Currently, two official plugins are available:
+## Tecnologías
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+React 19, Vite, React Router, Recharts (gráficos), Lucide (íconos) y read-excel-file (importación de Excel). Lint con Oxlint.
 
-## React Compiler
+## Cómo correrlo
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
+echo VITE_API_URL=http://localhost:8000 > .env.local   # URL del backend
+npm run dev                                           # http://localhost:5173
+```
 
-## Expanding the Oxlint configuration
+Sin `VITE_API_URL` el frontend funciona en **modo demo**, con las reglas locales de `src/lib/copilot.js` y sin base de datos.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+Con Docker, el `Dockerfile` compila la aplicación y la sirve con nginx en el puerto 80 (`docker compose up` la publica en http://localhost:8080).
+
+| Comando | Qué hace |
+|---|---|
+| `npm run dev` | Servidor de desarrollo en el puerto 5173 |
+| `npm run build` | Compila a `dist/` |
+| `npm run lint` | Revisa el código con Oxlint |
+
+## Estructura
+
+| Carpeta | Contenido |
+|---|---|
+| `src/pages/` | Pantallas: `Login`, `Dashboard` (chat y reporte), `Proyecciones`, `Biblioteca` (carpetas) y `VistaDashboard` |
+| `src/components/` | Chat, panel de filtros, gráficos, mapa, modales de usuarios, permisos y recuperación de clave |
+| `src/lib/api.js` | Llamadas al backend con el token de sesión |
+| `src/lib/` | Formato de cifras, gráficos, análisis, importación y persistencia local |
+| `src/hooks/` | Historial de conversaciones y proyecciones |
+
+El token de sesión se guarda en el navegador y viaja en el encabezado `Authorization`. El backend saca el usuario del token, nunca de lo que envíe el navegador.
