@@ -2,7 +2,7 @@
 
 ## El flujo, paso a paso
 
-Base de datos: **SQL Server, `DB_BI_RUTA_SMART`** (scripts `00`–`14` de `Fase 3/database` + `15`–`17` de `db/sqlserver`).
+Base de datos: **SQL Server, `DB_BI_RUTA_SMART`** (scripts `00`–`14` de `../Levantamiento Database` + `15`–`17` de `db/sqlserver`).
 
 ```
 Frontend (chat)                 Backend (este proyecto)                              SQL Server
@@ -54,7 +54,7 @@ Python convierte ese plan en SQL. Así:
 | `app/db.py` | Conexión a SQL Server (pyodbc): seguridad, metadatos, ejecución como `bi_lector` y traza |
 | `app/claves.py` / `app/sesion.py` | Hash de contraseñas (PBKDF2-SHA256 con sal) y token de sesión firmado |
 | `app/analisis.py` | Comparación con el período anterior o el año anterior (solo métricas que lo permiten) y proyección por suavizamiento exponencial con tendencia (Holt), con cambios de nivel y meses atípicos |
-| `db/sqlserver/15–17_*.sql` | **Propuesta para la BD** (siguen la numeración de `Fase 3/database`): tabla de traza `seguridad.SEG_LOG_CONSULTA`, usuario de solo lectura `bi_lector` y contraseñas (hash) de los usuarios |
+| `db/sqlserver/15–17_*.sql` | **Propuesta para la BD** (siguen la numeración de `../Levantamiento Database`): tabla de traza `seguridad.SEG_LOG_CONSULTA`, usuario de solo lectura `bi_lector` y contraseñas (hash) de los usuarios |
 | `db/sqlserver/25_CREATE_DASHBOARDS.sql` | Schema `app`: carpetas compartidas, miembros (LECTOR / EDITOR) y dashboards guardados (RF-022) |
 | `db/sqlserver/26_DASHBOARD_PERMISO.sql` | Permiso por dashboard: un miembro puede tener en un dashboard un rol distinto al de la carpeta |
 
@@ -100,17 +100,23 @@ El propietario también puede dar a un miembro un rol distinto en un dashboard p
 
 ## Cómo correrlo
 
+**Con Docker (todo el sistema):** desde la carpeta `RootSmart`, `copy .env.example .env`, completar las claves y `docker compose up --build`. Levanta SQL Server, carga los scripts en orden, el backend (http://localhost:8000/docs) y el frontend (http://localhost:8080). Ver el README de la raíz del repositorio.
+
+**Pruebas:** `pip install -r requirements-dev.txt` y `pytest -v` (no necesitan SQL Server ni la API de Anthropic).
+
+**Sin Docker:**
+
 1. Base de datos, en este orden (con SQL Server Management Studio o `sqlcmd`):
-   - los scripts `00` a `13` de `Fase 3/database` (el `14` valida la instalación),
-   - los scripts `15` a `17` de `backend/db/sqlserver`.
+   - los scripts `00` a `13`, `15` a `18` y `20` de `../Levantamiento Database` (`14`, `19` y `21` validan la instalación),
+   - los scripts `15` a `17` y `22` a `26` de `backend/db/sqlserver`.
 
    Con sqlcmd (el `-f 65001` es para que las tildes y la ñ se carguen bien), desde Git Bash:
 
    ```bash
-   cd "Fase 3/database"
-   for f in 0*.sql 1[0-3]_*.sql; do sqlcmd -S "localhost\MSSQLSERVER01" -E -C -b -f 65001 -i "$f"; done
-   cd "../../Fase 2/Evidencias Proyecto/backend/db/sqlserver"
-   for f in 1[5-7]_*.sql; do sqlcmd -S "localhost\MSSQLSERVER01" -E -C -b -f 65001 -i "$f"; done
+   cd "../../Levantamiento Database"
+   for f in 0*.sql 1[0-3]_*.sql 1[5-8]_*.sql 20_*.sql; do sqlcmd -S "localhost\MSSQLSERVER01" -E -C -b -f 65001 -i "$f"; done
+   cd "../RootSmart/backend/db/sqlserver"
+   for f in 1[5-7]_*.sql 2[2-6]_*.sql; do sqlcmd -S "localhost\MSSQLSERVER01" -E -C -b -f 65001 -i "$f"; done
    ```
 
 2. Backend:
@@ -164,7 +170,7 @@ Los tokens reales de cada consulta quedan en `seguridad.SEG_LOG_CONSULTA` (`NUM_
 
 ## Coordinación con la base de datos
 
-- Lo que el backend toma del modelo de `Fase 3/database`: usuarios, dominios y permisos (`seguridad.*`) y el catálogo (`meta.MET_TABLA`, `MET_COLUMNA`, `MET_RELACION`). Apagar `FLG_DISPONIBLE_IA` o `FLG_ACTIVO` de una tabla, columna o relación saca de los reportes lo que dependa de ella (el catálogo se recarga cada 5 minutos).
+- Lo que el backend toma del modelo de `../Levantamiento Database`: usuarios, dominios y permisos (`seguridad.*`) y el catálogo (`meta.MET_TABLA`, `MET_COLUMNA`, `MET_RELACION`). Apagar `FLG_DISPONIBLE_IA` o `FLG_ACTIVO` de una tabla, columna o relación saca de los reportes lo que dependa de ella (el catálogo se recarga cada 5 minutos).
 - Los reportes de SIN y FIN se unen con `ODS_SEG_SEGURO` (por `ID_ITEM`) para poder agrupar por producto y región, y los de SEG con `ODS_SEG_CLIENTE`, siguiendo `meta.MET_RELACION`. Esa unión solo aporta atributos descriptivos, no métricas de otro dominio.
 - Los scripts `15` y `16` son una **propuesta** para revisar con quien diseña la BD. Si cambian nombres de tabla o columnas, se ajustan las definiciones de `app/catalogo.py`.
 

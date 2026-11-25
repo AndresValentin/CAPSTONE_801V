@@ -1,0 +1,85 @@
+# RootSmart: sistema completo con Docker Compose
+#
+#   1. copy .env.example .env   (completar ANTHROPIC_API_KEY y las claves)
+#   2. docker compose up --build
+#   3. abrir http://localhost:8080  (usuarios USR_SIN, USR_FIN, USR_SEG, USR_ADMIN; clave 1234)
+#
+# Servicios:
+#   db       SQL Server 2022 con la base DB_BI_RUTA_SMART
+#   db-init  ejecuta una sola vez los scripts SQL, en orden, y termina
+#   backend  API FastAPI (http://localhost:8000/docs)
+#   frontend React compilado, servido con nginx (http://localhost:8080)
+
+name: rootsmart
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Falta MSSQL_SA_PASSWORD en .env}
+    ports:
+      - "1433:1433"
+    volumes:
+      - datos-sql:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+    volumes:
+      - "../Levantamiento Database:/scripts/modelo:ro"
+      - "./backend/db/sqlserver:/scripts/backend:ro"
+      - "./db-init/init.sh:/init.sh:ro"
+    entrypoint: ["bash", "/init.sh"]
+    restart: "no"
+
+  backend:
+    build: ./backend
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?Falta ANTHROPIC_API_KEY en .env}
+      SESSION_SECRET: ${SESSION_SECRET:?Falta SESSION_SECRET en .env}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-haiku-5-5}
+      DB_SERVER: db
+      DB_NAME: DB_BI_RUTA_SMART
+      DB_DRIVER: ODBC Driver 18 for SQL Server
+      DB_USER: sa
+      DB_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_USUARIO_LECTOR: bi_lector
+      DB_TIMEOUT: "30"
+      FRONTEND_ORIGIN: http://localhost:8080
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/salud')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:8000
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "8080:80"
+
+volumes:
+  datos-sql:
