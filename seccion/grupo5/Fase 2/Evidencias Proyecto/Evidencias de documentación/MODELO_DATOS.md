@@ -1,4 +1,4 @@
-# BI Copilot - Modelo de Datos
+# RootSmart - Modelo de Datos
 
 ## 1. Objetivo
 
